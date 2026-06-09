@@ -1,7 +1,12 @@
 sources:
-  - path/to/docs
-  - path/to/skills
-  - path/to/workflows
+  - type: local
+    path: path/to/docs
+  - type: local
+    path: path/to/skills
+  - type: local
+    path: path/to/workflows
+  - type: 3rd-party
+    configs: comming soon
 
 /* This is an example configuration file for the context sources definition.
 You can copy this file to config.yaml and modify it as needed. */

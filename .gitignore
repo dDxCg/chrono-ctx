@@ -1,2 +1,7 @@
 config.yaml
 note/*
+.venv
+.env.*
+.env
+db-dev.sqlite
+__pycache__
