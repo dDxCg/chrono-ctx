@@ -1,0 +1,42 @@
+import logging
+from functools import wraps
+from typing import Callable
+
+def setup_logger(level=logging.INFO):
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+
+def get_logger(name: str):
+    return logging.getLogger(name)
+
+def log_enabled(description: str | None = None):
+    def decorator(func: Callable):
+        name = (
+            f"{func.__qualname__} ({description})"
+            if description
+            else func.__qualname__
+        )
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                res = func(*args, **kwargs)
+                logger = get_logger(func.__module__)
+                logger.info(
+                    f"{name} succeeded"
+                )
+                return res
+            except Exception:
+                logger = get_logger(func.__module__)
+                logger.exception(
+                    f"{name} failed"
+                )
+                raise
+
+        return wrapper
+    
+    if callable(description):
+        return decorator(description)
+
+    return decorator  

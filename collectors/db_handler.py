@@ -1,6 +1,6 @@
 import sqlite3
-import os
-from dotenv import load_dotenv
+from collectors.shared.types import Query
+from utils.logger import log_enabled
 
 class DBHandler:
     def __init__(self, db_url):
@@ -10,22 +10,37 @@ class DBHandler:
     def connect(self):
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_url)
-
-    def execute(self, query, params=None):
+            
+    @log_enabled("Execute database query")
+    def execute(self, commit: bool, query: Query):
         self.connect()
         cursor = self.conn.cursor()
-        if params:
-            cursor.execute(query, params)
+        if query.params:
+            cursor.execute(query.query, query.params)
         else:
-            cursor.execute(query)
-        self.conn.commit()
+            cursor.execute(query.query)
+        if commit:
+            self.conn.commit()
         return cursor.fetchall()
-    
+
+
+    @log_enabled("Check database connection")
     def check_connection(self):
-        self.execute("SELECT 1")
-        print("Connected to database.")
+        self.execute(commit=False, query=Query(query="SELECT 1"))
+        return True
 
     def close(self):
         if self.conn:
             self.conn.close()
             self.conn = None
+
+    def commit(self):
+        if self.conn:
+            self.conn.commit()
+
+    def rollback(self):
+        if self.conn:
+            self.conn.rollback()
+
+    def begin(self):
+        self.execute(commit=False, query=Query(query="BEGIN"))
