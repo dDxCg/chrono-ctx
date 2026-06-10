@@ -13,6 +13,7 @@ def get_logger(name: str):
 
 def log_enabled(description: str | None = None):
     def decorator(func: Callable):
+        logger = get_logger(func.__module__)
         name = (
             f"{func.__qualname__} ({description})"
             if description
@@ -22,13 +23,11 @@ def log_enabled(description: str | None = None):
         def wrapper(*args, **kwargs):
             try:
                 res = func(*args, **kwargs)
-                logger = get_logger(func.__module__)
                 logger.info(
                     f"{name} succeeded"
                 )
                 return res
             except Exception:
-                logger = get_logger(func.__module__)
                 logger.exception(
                     f"{name} failed"
                 )

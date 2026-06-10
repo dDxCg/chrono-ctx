@@ -15,15 +15,27 @@ def load_db_url():
         return os.getenv("DATABASE_URL")
     
 @log_enabled("Save data to file")
-def save_to_file(data, file_path):
-    if os.path.exists(file_path):
-        return
-    with open(file_path, "w") as f:
+def save_to_file(data, file_path, mode="wb"):
+    with open(file_path, mode) as f:
         f.write(data)
 
 def make_dirs(*path: Path):
     for p in path:
         p.mkdir(parents=True, exist_ok=True)
+
+def path_normalize(path: str) -> str:
+    p = Path(path).expanduser()
+    p = p.resolve(strict=False)
+    return p.as_posix()
+
+def collect_files(path: str) -> list[Path]:
+    p = Path(path).resolve()
+
+    if p.is_file():
+        return [p]
+
+    if p.is_dir():
+        return [f for f in p.rglob("*") if f.is_file()]
 
 def content_similarity(content1: str, content2: str) -> float:
     set1 = set(content1.split())

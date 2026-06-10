@@ -1,0 +1,7 @@
+sources:
+  - type: local
+    path: C:\Users\admin\Documents\context-OS\knowledge.example\docs
+  - type: local
+    path: C:\Users\admin\Documents\context-OS\knowledge.example\prompts
+  - type: local
+    path: C:\Users\admin\Documents\context-OS\knowledge.example\workflows
