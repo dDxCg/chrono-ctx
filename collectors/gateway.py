@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime
 
 from app.db_handler import DBHandler
-from utils.helper import load_db_url, save_to_file, path_normalize
+from utils.helper import load_db_url, save_to_file, read_file
 from utils.logger import log_enabled
 from collectors.adapters.local_adapter import LocalAdapter
 from collectors.shared.config import BLOB_CONFIG
@@ -16,9 +16,7 @@ class Gateway:
 
     @log_enabled("Process configuration file")
     def process_config(self, config_path): 
-        config_path = path_normalize(config_path)
-        with open(config_path, "rb") as f:
-            file_content = f.read()
+        file_content = read_file(config_path, 'rb')
         
         save_to_file(file_content, BLOB_CONFIG / f"config.blob", mode="wb")
 
@@ -32,7 +30,11 @@ class Gateway:
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config["sources"]
+    
+    def analyze_events(self):
+        pass
 
+    
 if __name__ == "__main__":
     from utils.logger import setup_logger
     setup_logger()

@@ -8,3 +8,5 @@ make_dirs(
     BLOB_ROOT, 
     BLOB_CONFIG
 )
+
+NEW_VERSION_THRESHOLD = 0.9

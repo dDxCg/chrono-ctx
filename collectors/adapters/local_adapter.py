@@ -2,7 +2,7 @@ from pathlib import Path
 import hashlib
 import uuid
 
-from utils.helper import save_to_file, path_normalize, collect_files
+from utils.helper import save_to_file, collect_files, read_file
 from utils.logger import log_enabled
 
 from collectors.shared.config import BLOB_ROOT
@@ -16,9 +16,7 @@ class LocalAdapter:
 
     @log_enabled("Process local file")
     def local_file_processing(self, file_path):
-        file_path = path_normalize(file_path)
-        with open(file_path, "rb") as f:
-            file_content = f.read()
+        file_content = read_file(file_path, mode='rb')
 
         content_hash = hashlib.sha256(file_content).hexdigest()
         context_id = str(uuid.uuid4())
@@ -35,7 +33,6 @@ class LocalAdapter:
 
     @log_enabled
     def local_directory_processing(self, dir_path):
-        dir_path = path_normalize(dir_path)
         files = collect_files(dir_path)
         for file_path in files:
             self.local_file_processing(file_path)
