@@ -2,23 +2,22 @@ from pathlib import Path
 import hashlib
 import uuid
 
-from src.utils.helper import save_to_file, collect_files, read_file
+from src.utils.helper import save_to_file, collect_files, read_file, hash
 from src.utils.logger import log_enabled
 
 from src.vcs.shared.config import BLOB_ROOT
 from src.vcs.shared.types import ContextEntry
-from src.vcs.db_handler import DBHandler
+from src.vcs.db.sqlite import DBHandler
 from src.vcs.services.versioning import append_context
 
 class LocalAdapter:
     def __init__(self, db_handler: DBHandler):
         self.db_handler = db_handler
 
-    @log_enabled("Process local file")
-    def local_file_processing(self, file_path):
-        file_content = read_file(file_path, mode='rb')
+    def local_file_processing(self, file_path: Path):
+        file_content = file_path.read_bytes()
 
-        content_hash = hashlib.sha256(file_content).hexdigest()
+        content_hash = hash(file_content)
         context_id = str(uuid.uuid4())
 
         context_entry = ContextEntry(
@@ -29,9 +28,9 @@ class LocalAdapter:
         )
 
         append_context(self.db_handler, context_entry)
-        save_to_file(file_content, BLOB_ROOT / f"{content_hash}.blob", mode="wb")
+        save_path = BLOB_ROOT / f"{content_hash}.blob"
+        save_path.write_bytes(file_content)
 
-    @log_enabled
     def local_directory_processing(self, dir_path):
         files = collect_files(dir_path)
         for file_path in files:

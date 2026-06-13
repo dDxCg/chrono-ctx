@@ -1,13 +1,14 @@
 from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
 from src.utils.logger import log_enabled
-from src.vcs.shared.types import ContextEntry, Location, Query, Version
-from src.vcs.db_handler import DBHandler
+from src.vcs.shared.types import AddEvent, ContextEntry, DeleteEvent, MoveEvent, Query, Version, ModifyEvent
+from src.vcs.db.sqlite import DBHandler
 from src.utils.helper import read_file, text_similarity, bytes_to_string, hash
+from src.vcs.shared.temp_file import TempFile
 
-@log_enabled("Add context to database")
+@log_enabled
 def append_context(db_handler: DBHandler, context_entry: ContextEntry):
     try:
-        if check_context_exists(db_handler, context_entry.content_hash):
+        if _check_context_exists(db_handler, context_entry.content_hash):
             return
 
         db_handler.begin()
@@ -32,48 +33,43 @@ def append_context(db_handler: DBHandler, context_entry: ContextEntry):
         db_handler.rollback()
         raise 
 
-def check_context_exists(db_handler: DBHandler, content_hash: str) -> bool:
-    check_content_hash = Query(
-        query = """SELECT c.context_id 
-                FROM contexts c JOIN versions v ON c.context_id = v.context_id 
-                WHERE v.content_hash = ?""",
-        params = (content_hash,)
-    )
-    result = db_handler.execute(commit=False, query=check_content_hash)
-    return bool(result)
-
 #issue: same path + diff context_id
 #to do: tmp file handler: create, GC
 @log_enabled
-def content_modify_handle(db_handler: DBHandler, location: Location, tmp_blob_path: str, commit: bool) -> bool:
-    get_context_id = Query(
-        query = "SELECT context_id FROM locations WHERE location = ?",
-        params = (location.location,)
-    )
-    res = db_handler.execute(commit=False, query=get_context_id)
-    context_id = res[0][0]
+def modify_handle(db_handler: DBHandler, event: ModifyEvent, tmp_file: TempFile) -> bool:
+    context_id = _get_context_id_by_location(db_handler, event.src)
     current_version = _check_current_version(context_id)
-    get_content_hash = Query(
-        query = "SELECT content_hash from versions WHERE context_id = ? AND version_number = ?",
-        params = (context_id, current_version)
-    )
-    res = db_handler.execute(commit=False, query=get_content_hash)
-    content_hash = res[0][0]
-    latest_blob = read_file(BLOB_ROOT / f"{content_hash}.blob", mode="rb")
-    current_blob = read_file(tmp_blob_path, mode="rb")
-    similarity = text_similarity(bytes_to_string(latest_blob), bytes_to_string(current_blob))
-    if similarity < NEW_VERSION_THRESHOLD:
+    new_hash = _get_version_hash(db_handler, context_id, current_version)
+    if _decide_to_append_version(tmp_file, content_hash=new_hash):
         version = Version(
             version_number=current_version+1,
             context_id=context_id,
-            content_hash=hash(current_blob)
+            content_hash=new_hash
         )
-        _append_version(db_handler, version, commit)
-        return True
-    return False
+        _append_version(db_handler, version, commit=True)
+        tmp_file.move_tmp_file(BLOB_ROOT / f"{new_hash}.blob")
+    else:
+        tmp_file.delete_tmp_file()
     
 
-#change location events: similarity deleted file blob and added file blob -> new context/new version + update locations
+#to do: check to append new version
+#change old path + add new version via context id
+def move_handle(db_handler: DBHandler, event: MoveEvent, tmp_file = TempFile):
+    location = _change_location(db_handler, event.src, event.dst, commit=True)
+    sub_event = ModifyEvent(event.provider, location)
+    modify_handle(db_handler, sub_event, tmp_file, commit=True)
+    
+#issue: reactive existed source
+def add_handle(db_handler: DBHandler, event: AddEvent):
+    context_entry = ContextEntry(event.src)
+    append_context(db_handler, context_entry)
+
+def delete_handle(db_handler: DBHandler, event: DeleteEvent):
+    query = Query(
+        query = "UPDATE locations SET status = 0 WHERE location = ?",
+        params = (event.src,)
+    )
+    db_handler.execute(commit=True, query=query)
 
 def _check_current_version(db_handler: DBHandler, context_id: str):
     get_current_version = Query(
@@ -90,4 +86,46 @@ def _append_version(db_handler: DBHandler, version: Version, commit: bool):
         )
     db_handler.execute(commit=commit, query=create_version)
 
+def _get_context_id_by_location(db_handler: DBHandler, location: str):
+    get_context_id = Query(
+        query = "SELECT context_id FROM locations WHERE location = ?",
+        params = (location,)
+    )
+    res = db_handler.execute(commit=False, query=get_context_id)
+    return res[0][0]
 
+def _change_location(db_handler: DBHandler, prev_location: str, cur_location: str, commit: bool):
+    context_id = _get_context_id_by_location(db_handler, prev_location)
+    update_path = Query(
+        query="UPDATE locations SET location = ? WHERE context_id = ?",
+        params = (cur_location, context_id)
+    )
+    db_handler.execute(commit, update_path)
+    return cur_location
+    
+def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
+    upcoming_blob = tmp_file.read_bytes()
+    current_blob = (BLOB_ROOT / f"{content_hash}.blob").read_bytes()
+    similarity = text_similarity(bytes_to_string(current_blob), bytes_to_string(upcoming_blob))
+    if similarity < NEW_VERSION_THRESHOLD:
+        return True
+    return False
+
+def _get_version_hash(db_handler: DBHandler, context_id: str, version_number: int):
+    get_content_hash = Query(
+        query = "SELECT content_hash from versions WHERE context_id = ? AND version_number = ?",
+        params = (context_id, version_number)
+    )
+    res = db_handler.execute(commit=False, query=get_content_hash)
+    return res[0][0]
+
+
+def _check_context_exists(db_handler: DBHandler, content_hash: str) -> bool:
+    check_content_hash = Query(
+        query = """SELECT c.context_id 
+                FROM contexts c JOIN versions v ON c.context_id = v.context_id 
+                WHERE v.content_hash = ?""",
+        params = (content_hash,)
+    )
+    result = db_handler.execute(commit=False, query=check_content_hash)
+    return bool(result)

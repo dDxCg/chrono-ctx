@@ -5,7 +5,6 @@ from pathlib import Path
 
 from src.utils.logger import log_enabled
 
-@log_enabled("Load mode and database URL")
 def load_db_url():
     load_dotenv()
     MODE = os.getenv("MODE", "dev")
@@ -16,19 +15,16 @@ def load_db_url():
         load_dotenv(".env.prod")
         return os.getenv("DATABASE_URL")
     
-@log_enabled("Save data to file")
 def save_to_file(data, file_path, mode="wb"):
     with open(file_path, mode) as f:
         f.write(data)
 
-@log_enabled
 def read_file(file_path: str, mode: str = 'rb'):
     file_path = _path_normalize(file_path)
     with open(file_path, mode) as f:
         file_content = f.read()
     return file_content
 
-@log_enabled
 def collect_files(path: str) -> list[Path]:
     path = _path_normalize(path)
     p = Path(path).resolve()

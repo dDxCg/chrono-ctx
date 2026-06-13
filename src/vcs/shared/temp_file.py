@@ -1,0 +1,27 @@
+from pathlib import Path
+import shutil
+from src.utils.helper import save_to_file, hash, make_dirs
+
+class TempFile:
+    TMP_DIR = Path("data/tmp")
+    def __init__(self, content):
+        make_dirs(self.TMP_DIR)
+        self.path = Path(f"{self.TMP_DIR}/{hash(content)}.blob")
+        self.create_tmp_file(self, content)
+
+    def create_tmp_file(self, content):
+        if type(content) == bytes:
+            save_to_file(content, self.path, mode="wb")
+        else:
+            save_to_file(content, self.path, mode="w")
+
+    def move_tmp_file(self, target_path: Path):
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(self.path, target_path)
+
+    def delete_tmp_file(self):
+        self.path.unlink(missing_ok=True)
+        # self.TMP_DIR.rmdir()
+
+    def read_bytes(self):
+        return self.path.read_bytes()

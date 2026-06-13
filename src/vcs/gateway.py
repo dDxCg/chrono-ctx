@@ -1,4 +1,4 @@
-from src.vcs.db_handler import DBHandler
+from src.vcs.db.sqlite import DBHandler
 from src.utils.helper import load_db_url, save_to_file, read_file
 from src.utils.logger import log_enabled
 from src.vcs.adapters.local_adapter import LocalAdapter
@@ -11,9 +11,9 @@ class Gateway:
     def __init__(self, db_handler: DBHandler):
         self.db_handler = db_handler
 
-    @log_enabled("Process configuration file")
-    def process_config(self, config_path): 
-        file_content = read_file(config_path, 'rb')
+    @log_enabled
+    def process_config(self, config_path: Path): 
+        file_content = config_path.read_bytes()
         
         save_to_file(file_content, BLOB_CONFIG / f"config.blob", mode="wb")
 
@@ -23,7 +23,7 @@ class Gateway:
                 adapter = LocalAdapter(self.db_handler)
                 adapter.local_processing(source["path"])
 
-    def _get_sources(self, config_path):
+    def _get_sources(self, config_path: Path):
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config["sources"]
