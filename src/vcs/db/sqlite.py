@@ -10,7 +10,7 @@ class DBHandler:
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_url)
             
-    def execute(self, commit: bool, query: Query):
+    def execute(self, query: Query, commit: bool = True):
         self.connect()
         cursor = self.conn.cursor()
         if query.params:

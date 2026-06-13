@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
 from src.utils.logger import log_enabled
 from src.vcs.shared.types import AddEvent, ContextEntry, DeleteEvent, MoveEvent, Query, Version, ModifyEvent
@@ -5,27 +7,33 @@ from src.vcs.db.sqlite import DBHandler
 from src.utils.helper import read_file, text_similarity, bytes_to_string, hash
 from src.vcs.shared.temp_file import TempFile
 
+
 @log_enabled
 def append_context(db_handler: DBHandler, context_entry: ContextEntry):
     try:
-        if _check_context_exists(db_handler, context_entry.content_hash):
+        if _check_version_exists(db_handler, context_entry.content_hash):
             return
+        
+        context_id = _check_existed_location(db_handler, context_entry.location)
 
         db_handler.begin()
-        add_context = Query(
-            query = "INSERT INTO contexts (context_id) VALUES (?)",
-            params = (context_entry.context_id,)
-        )
-        add_location = Query(
-            query = "INSERT INTO locations (context_id, location, provider) VALUES (?, ?, ?)",
-            params = (context_entry.context_id, context_entry.location, context_entry.provider)
-        )
-        db_handler.execute(commit=False, query=add_context)
-        db_handler.execute(commit=False, query=add_location)
+        
+        if context_id is not None:
+            context_id = context_entry.context_id
+            add_context = Query(
+                query = "INSERT INTO contexts (context_id) VALUES (?)",
+                params = (context_entry.context_id,)
+            )
+            add_location = Query(
+                query = "INSERT INTO locations (context_id, location, provider) VALUES (?, ?, ?)",
+                params = (context_entry.context_id, context_entry.location, context_entry.provider)
+            )
+            db_handler.execute(commit=False, query=add_context)
+            db_handler.execute(commit=False, query=add_location)
 
-        version_number = _check_current_version(db_handler, context_entry.context_id)
+        version_number = _check_current_version(db_handler, context_id)
         version = Version(version_number = version_number, 
-                          context_id = context_entry.context_id, 
+                          context_id = context_id, 
                           content_hash = context_entry.content_hash)
         _append_version(db_handler, version, commit=False)
         db_handler.commit()
@@ -33,8 +41,6 @@ def append_context(db_handler: DBHandler, context_entry: ContextEntry):
         db_handler.rollback()
         raise 
 
-#issue: same path + diff context_id
-#to do: tmp file handler: create, GC
 @log_enabled
 def modify_handle(db_handler: DBHandler, event: ModifyEvent, tmp_file: TempFile) -> bool:
     context_id = _get_context_id_by_location(db_handler, event.src)
@@ -52,24 +58,45 @@ def modify_handle(db_handler: DBHandler, event: ModifyEvent, tmp_file: TempFile)
         tmp_file.delete_tmp_file()
     
 
-#to do: check to append new version
 #change old path + add new version via context id
+@log_enabled
 def move_handle(db_handler: DBHandler, event: MoveEvent, tmp_file = TempFile):
     location = _change_location(db_handler, event.src, event.dst, commit=True)
     sub_event = ModifyEvent(event.provider, location)
     modify_handle(db_handler, sub_event, tmp_file, commit=True)
     
-#issue: reactive existed source
+@log_enabled
 def add_handle(db_handler: DBHandler, event: AddEvent):
     context_entry = ContextEntry(event.src)
     append_context(db_handler, context_entry)
 
+@log_enabled
 def delete_handle(db_handler: DBHandler, event: DeleteEvent):
     query = Query(
         query = "UPDATE locations SET status = 0 WHERE location = ?",
         params = (event.src,)
     )
     db_handler.execute(commit=True, query=query)
+
+def deactive_and_reactive_sources(db_handler: DBHandler, sources):
+    try:
+        db_handler.begin()
+        deactive_all = Query(
+            query="UPDATE locations SET status = 0"
+        ) 
+        db_handler.execute(deactive_all, commit=False)
+        for source in sources:
+            source = str(source)
+            reactive_query = Query(
+                query = "UPDATE locations SET status = 1 WHERE location LIKE ? or location = ?",
+                params = (source, source + "/%")
+            )
+            db_handler.execute(reactive_query, commit=False)
+        db_handler.commit()
+    except Exception:
+        db_handler.rollback()
+        raise
+    
 
 def _check_current_version(db_handler: DBHandler, context_id: str):
     get_current_version = Query(
@@ -100,7 +127,7 @@ def _change_location(db_handler: DBHandler, prev_location: str, cur_location: st
         query="UPDATE locations SET location = ? WHERE context_id = ?",
         params = (cur_location, context_id)
     )
-    db_handler.execute(commit, update_path)
+    db_handler.execute(update_path, commit)
     return cur_location
     
 def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
@@ -120,7 +147,7 @@ def _get_version_hash(db_handler: DBHandler, context_id: str, version_number: in
     return res[0][0]
 
 
-def _check_context_exists(db_handler: DBHandler, content_hash: str) -> bool:
+def _check_version_exists(db_handler: DBHandler, content_hash: str) -> bool:
     check_content_hash = Query(
         query = """SELECT c.context_id 
                 FROM contexts c JOIN versions v ON c.context_id = v.context_id 
@@ -129,3 +156,14 @@ def _check_context_exists(db_handler: DBHandler, content_hash: str) -> bool:
     )
     result = db_handler.execute(commit=False, query=check_content_hash)
     return bool(result)
+
+def _check_existed_location(db_handler: DBHandler, location: str):
+    check_path = Query(
+        query="SELECT context_id FROM locations WHERE location = ?",
+        params = (location,)
+    )
+    res = db_handler.execute(commit=False, query = check_path)
+    if res:
+        return res[0][0]
+    return None
+    

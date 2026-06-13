@@ -3,9 +3,11 @@ from src.utils.helper import load_db_url, save_to_file, read_file
 from src.utils.logger import log_enabled
 from src.vcs.adapters.local_adapter import LocalAdapter
 from src.vcs.shared.config import BLOB_CONFIG
+from src.vcs.services.versioning import deactive_and_reactive_sources
 
 from pathlib import Path
 import yaml
+from datetime import datetime
 
 class Gateway:
     def __init__(self, db_handler: DBHandler):
@@ -14,10 +16,13 @@ class Gateway:
     @log_enabled
     def process_config(self, config_path: Path): 
         file_content = config_path.read_bytes()
-        
-        save_to_file(file_content, BLOB_CONFIG / f"config.blob", mode="wb")
+        (BLOB_CONFIG / f"config.blob").write_bytes(file_content)
 
         sources = self._get_sources(config_path)
+
+        #Fetch status with config sources
+        deactive_and_reactive_sources(self.db_handler, sources=sources)
+
         for source in sources:
             if source["type"] == "local":
                 adapter = LocalAdapter(self.db_handler)
