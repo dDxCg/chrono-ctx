@@ -2,13 +2,13 @@ from pathlib import Path
 import hashlib
 import uuid
 
-from utils.helper import save_to_file, collect_files, read_file
-from utils.logger import log_enabled
+from src.utils.helper import save_to_file, collect_files, read_file
+from src.utils.logger import log_enabled
 
-from collectors.shared.config import BLOB_ROOT
-from collectors.shared.types import ContextEntry
-from app.db_handler import DBHandler
-from collectors.shared.functions import append_context
+from src.vcs.shared.config import BLOB_ROOT
+from src.vcs.shared.types import ContextEntry
+from src.vcs.db_handler import DBHandler
+from src.vcs.services.versioning import append_context
 
 class LocalAdapter:
     def __init__(self, db_handler: DBHandler):

@@ -24,12 +24,12 @@ def log_enabled(description: str | None = None):
             try:
                 res = func(*args, **kwargs)
                 logger.info(
-                    f"{name} succeeded"
+                    f"[SUCCEEDED] {name}"
                 )
                 return res
             except Exception:
                 logger.exception(
-                    f"{name} failed"
+                    f"[FAILED] {name}"
                 )
                 raise
 

@@ -1,11 +1,8 @@
-import hashlib
-from datetime import datetime
-
-from app.db_handler import DBHandler
-from utils.helper import load_db_url, save_to_file, read_file
-from utils.logger import log_enabled
-from collectors.adapters.local_adapter import LocalAdapter
-from collectors.shared.config import BLOB_CONFIG
+from src.vcs.db_handler import DBHandler
+from src.utils.helper import load_db_url, save_to_file, read_file
+from src.utils.logger import log_enabled
+from src.vcs.adapters.local_adapter import LocalAdapter
+from src.vcs.shared.config import BLOB_CONFIG
 
 from pathlib import Path
 import yaml
@@ -36,9 +33,9 @@ class Gateway:
 
     
 if __name__ == "__main__":
-    from utils.logger import setup_logger
+    from src.utils.logger import setup_logger
     setup_logger()
     db_handler = DBHandler(load_db_url())
     gateway = Gateway(db_handler)
-    config_path = Path(__file__).parent.parent / "config.yaml"
+    config_path = "config.yaml"
     gateway.process_config(config_path)

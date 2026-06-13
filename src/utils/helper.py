@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-from utils.logger import log_enabled
+from src.utils.logger import log_enabled
 
 @log_enabled("Load mode and database URL")
 def load_db_url():

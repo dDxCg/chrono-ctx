@@ -4,4 +4,5 @@ note/*
 .env.*
 .env
 db-dev.sqlite
+docs/note.md
 __pycache__

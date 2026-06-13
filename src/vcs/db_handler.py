@@ -1,6 +1,6 @@
 import sqlite3
-from collectors.shared.types import Query
-from utils.logger import log_enabled
+from src.vcs.shared.types import Query
+from src.utils.logger import log_enabled
 
 class DBHandler:
     def __init__(self, db_url):

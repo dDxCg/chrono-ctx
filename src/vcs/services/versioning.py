@@ -1,8 +1,8 @@
-from collectors.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
-from utils.logger import log_enabled
-from collectors.shared.types import ContextEntry, Location, Query, Version
-from app.db_handler import DBHandler
-from utils.helper import read_file, text_similarity, bytes_to_string, hash
+from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
+from src.utils.logger import log_enabled
+from src.vcs.shared.types import ContextEntry, Location, Query, Version
+from src.vcs.db_handler import DBHandler
+from src.utils.helper import read_file, text_similarity, bytes_to_string, hash
 
 @log_enabled("Add context to database")
 def append_context(db_handler: DBHandler, context_entry: ContextEntry):
@@ -68,7 +68,7 @@ def content_modify_handle(db_handler: DBHandler, location: Location, tmp_blob_pa
             context_id=context_id,
             content_hash=hash(current_blob)
         )
-        _append_version(db_handler, version, commit=True)
+        _append_version(db_handler, version, commit)
         return True
     return False
     
