@@ -16,6 +16,7 @@ class Gateway:
     @log_enabled
     def process_config(self, config_path: Path): 
         file_content = config_path.read_bytes()
+        #TODO: get event update config -> restart worker (warning)
         (BLOB_CONFIG / f"config.blob").write_bytes(file_content)
 
         sources = self._get_sources(config_path)
@@ -39,8 +40,9 @@ class Gateway:
     
 if __name__ == "__main__":
     from src.utils.logger import setup_logger
-    setup_logger()
+    import logging
+    setup_logger(logging.DEBUG)
     db_handler = DBHandler(load_db_url())
     gateway = Gateway(db_handler)
-    config_path = "config.yaml"
+    config_path = Path("config.yaml")
     gateway.process_config(config_path)

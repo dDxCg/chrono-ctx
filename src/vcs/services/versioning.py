@@ -78,6 +78,7 @@ def delete_handle(db_handler: DBHandler, event: DeleteEvent):
     )
     db_handler.execute(commit=True, query=query)
 
+@log_enabled
 def deactive_and_reactive_sources(db_handler: DBHandler, sources):
     try:
         db_handler.begin()

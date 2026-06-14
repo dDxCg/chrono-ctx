@@ -23,7 +23,7 @@ def log_enabled(description: str | None = None):
         def wrapper(*args, **kwargs):
             try:
                 res = func(*args, **kwargs)
-                logger.info(
+                logger.debug(
                     f"[SUCCEEDED] {name}"
                 )
                 return res

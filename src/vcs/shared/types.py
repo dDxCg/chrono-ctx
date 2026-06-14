@@ -18,6 +18,12 @@ class ContextEntry:
         self.location = path
         self.provider = 'local'
 
+    def __init__(self, context_id: str, location: str, provider: str, content_hash: str):
+        self.context_id = context_id
+        self.location = location
+        self.provider = provider
+        self.content_hash = content_hash
+
 
 @dataclass
 class Location:
