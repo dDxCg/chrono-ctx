@@ -1,9 +1,9 @@
 
 from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
 from src.utils.logger import log_enabled
-from src.vcs.shared.types import AddEvent, ContextEntry, DeleteEvent, MoveEvent, Query, Version, ModifyEvent
+from src.vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, Version, ModifiedEvent
 from src.vcs.db.sqlite import DBHandler
-from src.utils.helper import text_similarity, bytes_to_string
+from src.utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files
 from src.vcs.shared.temp_file import TempFile
 
 
@@ -41,7 +41,7 @@ def append_context(db_handler: DBHandler, context_entry: ContextEntry):
         raise 
 
 @log_enabled
-def modify_handle(db_handler: DBHandler, event: ModifyEvent, tmp_file: TempFile) -> bool:
+def modify_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempFile) -> bool:
     context_id = _get_context_id_by_location(db_handler, event.src)
     current_version = _check_current_version(context_id)
     new_hash = _get_version_hash(db_handler, context_id, current_version)
@@ -59,18 +59,18 @@ def modify_handle(db_handler: DBHandler, event: ModifyEvent, tmp_file: TempFile)
 
 #change old path + add new version via context id
 @log_enabled
-def move_handle(db_handler: DBHandler, event: MoveEvent, tmp_file = TempFile):
+def move_handle(db_handler: DBHandler, event: MovedEvent, tmp_file = TempFile):
     location = _change_location(db_handler, event.src, event.dst, commit=True)
-    sub_event = ModifyEvent(event.provider, location)
+    sub_event = ModifiedEvent(event.provider, location)
     modify_handle(db_handler, sub_event, tmp_file, commit=True)
     
 @log_enabled
-def add_handle(db_handler: DBHandler, event: AddEvent):
+def add_handle(db_handler: DBHandler, event: CreatedEvent):
     context_entry = ContextEntry(event.src)
     append_context(db_handler, context_entry)
 
 @log_enabled
-def delete_handle(db_handler: DBHandler, event: DeleteEvent):
+def delete_handle(db_handler: DBHandler, event: DeletedEvent):
     query = Query(
         query = "UPDATE locations SET status = 0 WHERE location = ?",
         params = (event.src,)
@@ -86,12 +86,14 @@ def deactive_and_reactive_sources(db_handler: DBHandler, sources):
         ) 
         db_handler.execute(deactive_all, commit=False)
         for source in sources:
-            source = str(source)
-            reactive_query = Query(
-                query = "UPDATE locations SET status = 1 WHERE location LIKE ? or location = ?",
-                params = (source + "/%", source)
-            )
-            db_handler.execute(reactive_query, commit=False)
+            source_path = path_normalize(source["path"])
+            file_paths = collect_files(source_path)
+            for path in file_paths:
+                reactive_query = Query(
+                    query = "UPDATE locations SET status = 1 WHERE location = ?",
+                    params = (path,)
+                )
+                db_handler.execute(reactive_query, commit=False)
         db_handler.commit()
     except Exception:
         db_handler.rollback()

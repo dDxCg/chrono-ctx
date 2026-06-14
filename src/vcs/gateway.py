@@ -41,7 +41,8 @@ if __name__ == "__main__":
     from src.utils.logger import setup_logger
     import logging
     setup_logger(logging.DEBUG)
-    db_handler = DBHandler(load_db_url())
+    db_path = load_db_url()
+    db_handler = DBHandler(db_url=db_path)
     gateway = Gateway(db_handler)
     config_path = Path("config.yaml")
     gateway.process_config(config_path)

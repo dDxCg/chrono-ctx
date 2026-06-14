@@ -11,7 +11,7 @@ def setup_logger(level=logging.INFO):
 def get_logger(name: str):
     return logging.getLogger(name)
 
-def log_enabled(description: str | None = None):
+def log_enabled(description: str | None = None, level=logging.DEBUG):
     def decorator(func: Callable):
         logger = get_logger(func.__module__)
         name = (
@@ -23,9 +23,14 @@ def log_enabled(description: str | None = None):
         def wrapper(*args, **kwargs):
             try:
                 res = func(*args, **kwargs)
-                logger.debug(
-                    f"[SUCCEEDED] {name}"
-                )
+                if level == logging.DEBUG:
+                    logger.debug(
+                        f"[SUCCEEDED] {name}"
+                    )
+                if level == logging.INFO:
+                    logger.info(
+                        f"[SUCCEEDED] {name}"
+                    )
                 return res
             except Exception:
                 logger.exception(

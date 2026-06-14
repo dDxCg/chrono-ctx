@@ -2,13 +2,9 @@ import sqlite3
 from src.vcs.shared.types import Query
 
 class DBHandler:
-    def __init__(self, db_url):
+    def __init__(self, db_url=None, conn=None):
         self.db_url = db_url
-        self.conn = None
-
-    def __init__(self, conn):
         self.conn = conn
-        self.db_url = None
 
     def connect(self):
         if self.conn is None:

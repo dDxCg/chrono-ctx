@@ -20,20 +20,20 @@ def save_to_file(data, file_path, mode="wb"):
         f.write(data)
 
 def read_file(file_path: str, mode: str = 'rb'):
-    file_path = _path_normalize(file_path)
+    file_path = path_normalize(file_path)
     with open(file_path, mode) as f:
         file_content = f.read()
     return file_content
 
 def collect_files(path: str) -> list[Path]:
-    path = _path_normalize(path)
+    path = path_normalize(path)
     p = Path(path).resolve()
     if p.is_file():
-        return [p]
+        return [path_normalize(p)]
     if p.is_dir():
-        return [f for f in p.rglob("*") if f.is_file()]
+        return [path_normalize(f) for f in p.rglob("*") if f.is_file()]
 
-def _path_normalize(path: str) -> str:
+def path_normalize(path: str) -> str:
     p = Path(path).expanduser()
     p = p.resolve(strict=False)
     return p.as_posix()

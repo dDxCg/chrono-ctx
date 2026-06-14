@@ -11,20 +11,26 @@ class ContextEntry:
     content_hash: str
 
     #Construct for local path
-    def __init__(self, path: Path):
-        file_content = path.read_bytes()
-        self.content_hash = hash(file_content)
-        self.context_id = gen_ulid()
-        self.location = path
-        self.provider = 'local'
-
-    def __init__(self, context_id: str, location: str, provider: str, content_hash: str):
-        self.context_id = context_id
-        self.location = location
-        self.provider = provider
-        self.content_hash = content_hash
-
-
+    def __init__(
+            self, 
+            path: Path | None = None,
+            context_id: str | None = None, 
+            location: str | None = None, 
+            provider: str | None = None, 
+            content_hash: str | None = None
+            ):
+        if path is not None:
+            file_content = path.read_bytes()
+            self.content_hash = hash(file_content)
+            self.context_id = gen_ulid()
+            self.location = path
+            self.provider = 'local'
+        else:
+            self.context_id = context_id
+            self.location = location
+            self.provider = provider
+            self.content_hash = content_hash
+        
 @dataclass
 class Location:
     context_id: str
@@ -45,24 +51,25 @@ class Query:
 
 @dataclass
 class SourceEvent:
-    provider: str
     src: str
-    action: str
+    type: str
+    provider: str = "local"
+    is_dir: bool = False
 
 @dataclass
-class AddEvent(SourceEvent):
-    action: str = field(init=False, default="added")
+class CreatedEvent(SourceEvent):
+    type: str = field(init=False, default="added")
 
 @dataclass
-class ModifyEvent(SourceEvent):
-    action: str = field(init=False, default="modified")
+class ModifiedEvent(SourceEvent):
+    type: str = field(init=False, default="modified")
 
 @dataclass
-class DeleteEvent(SourceEvent):
-    action: str = field(init=False, default="deleted")
+class DeletedEvent(SourceEvent):
+    type: str = field(init=False, default="deleted")
 
-@dataclass
-class MoveEvent(SourceEvent):
-    action: str = field(init=False, default="moved")
+@dataclass(kw_only=True)
+class MovedEvent(SourceEvent):
+    type: str = field(init=False, default="moved")
     dst: str
 

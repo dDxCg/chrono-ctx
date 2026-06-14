@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-from src.utils.helper import collect_files, hash, gen_ulid, _path_normalize
+from src.utils.helper import collect_files, hash, gen_ulid, path_normalize
 from src.utils.logger import log_enabled
 
 from src.vcs.shared.config import BLOB_ROOT
@@ -14,6 +14,8 @@ class LocalAdapter:
         self.db_handler = db_handler
 
     def local_file_processing(self, file_path: Path):
+        if file_path is not Path:
+            file_path = Path(file_path)
         file_content = file_path.read_bytes()
         content_hash = hash(file_content)
         context_id = gen_ulid()
@@ -21,7 +23,7 @@ class LocalAdapter:
         context_entry = ContextEntry(
             context_id=context_id,
             provider="local",
-            location=_path_normalize(file_path),
+            location=path_normalize(file_path),
             content_hash=content_hash
         )
 

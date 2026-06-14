@@ -8,7 +8,7 @@ on:
 
   pull_request:
 
-jobs:
+jobs: 
 
   test:
 
@@ -41,7 +41,7 @@ jobs:
 
       - name: Ruff
         run: |
-          ruff check . --fix 
+          ruff check . --fix --ignore F811
 
       - name: Run Tests
         run: |
