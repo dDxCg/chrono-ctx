@@ -90,7 +90,7 @@ def deactive_and_reactive_sources(db_handler: DBHandler, sources):
             source = str(source)
             reactive_query = Query(
                 query = "UPDATE locations SET status = 1 WHERE location LIKE ? or location = ?",
-                params = (source, source + "/%")
+                params = (source + "/%", source)
             )
             db_handler.execute(reactive_query, commit=False)
         db_handler.commit()

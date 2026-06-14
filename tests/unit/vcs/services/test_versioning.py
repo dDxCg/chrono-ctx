@@ -44,8 +44,8 @@ class TestSyncSourceStatus:
         reactive_query = db.execute.call_args_list[1].args[0]
 
         assert reactive_query.params == (
-            "/root",
-            "/root/%"
+            "/root/%",
+            "/root"
         )
 
     def test_rollback_when_execute_fail(self):

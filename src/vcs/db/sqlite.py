@@ -6,6 +6,10 @@ class DBHandler:
         self.db_url = db_url
         self.conn = None
 
+    def __init__(self, conn):
+        self.conn = conn
+        self.db_url = None
+
     def connect(self):
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_url)
