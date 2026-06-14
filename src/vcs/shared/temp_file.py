@@ -10,7 +10,7 @@ class TempFile:
         self.create_tmp_file(self, content)
 
     def create_tmp_file(self, content):
-        if type(content) == bytes:
+        if type(content) is bytes:
             save_to_file(content, self.path, mode="wb")
         else:
             save_to_file(content, self.path, mode="w")

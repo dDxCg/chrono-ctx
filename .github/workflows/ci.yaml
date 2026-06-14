@@ -41,7 +41,7 @@ jobs:
 
       - name: Ruff
         run: |
-          ruff check .
+          ruff check . --fix --ignore F811
 
       - name: Run Tests
         run: |

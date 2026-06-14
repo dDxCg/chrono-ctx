@@ -1,10 +1,9 @@
-from pathlib import Path
 
 from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
 from src.utils.logger import log_enabled
 from src.vcs.shared.types import AddEvent, ContextEntry, DeleteEvent, MoveEvent, Query, Version, ModifyEvent
 from src.vcs.db.sqlite import DBHandler
-from src.utils.helper import read_file, text_similarity, bytes_to_string, hash
+from src.utils.helper import text_similarity, bytes_to_string
 from src.vcs.shared.temp_file import TempFile
 
 

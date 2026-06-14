@@ -4,7 +4,6 @@ from ulid import ULID
 from dotenv import load_dotenv
 from pathlib import Path
 
-from src.utils.logger import log_enabled
 
 def load_db_url():
     load_dotenv()
