@@ -1,5 +1,6 @@
 import hashlib
 import os
+from ulid import ULID
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -37,6 +38,7 @@ def _path_normalize(path: str) -> str:
     p = Path(path).expanduser()
     p = p.resolve(strict=False)
     return p.as_posix()
+    
 
 def make_dirs(*path: Path):
     for p in path:
@@ -61,3 +63,6 @@ def bytes_to_string(input: bytes):
 
 def hash(input: str):
     return hashlib.sha256(input).hexdigest()
+
+def gen_ulid():
+    return str(ULID())

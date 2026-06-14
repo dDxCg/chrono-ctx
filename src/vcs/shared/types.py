@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import uuid
+from src.utils.helper import gen_ulid
 
 @dataclass
 class ContextEntry:
@@ -14,7 +14,7 @@ class ContextEntry:
     def __init__(self, path: Path):
         file_content = path.read_bytes()
         self.content_hash = hash(file_content)
-        self.context_id = str(uuid.uuid4())
+        self.context_id = gen_ulid()
         self.location = path
         self.provider = 'local'
 

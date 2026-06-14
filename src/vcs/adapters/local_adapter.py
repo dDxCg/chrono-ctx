@@ -1,8 +1,7 @@
 from pathlib import Path
-import hashlib
-import uuid
 
-from src.utils.helper import save_to_file, collect_files, read_file, hash
+
+from src.utils.helper import collect_files, hash, gen_ulid, _path_normalize
 from src.utils.logger import log_enabled
 
 from src.vcs.shared.config import BLOB_ROOT
@@ -16,14 +15,13 @@ class LocalAdapter:
 
     def local_file_processing(self, file_path: Path):
         file_content = file_path.read_bytes()
-
         content_hash = hash(file_content)
-        context_id = str(uuid.uuid4())
+        context_id = gen_ulid()
 
         context_entry = ContextEntry(
             context_id=context_id,
             provider="local",
-            location=file_path,
+            location=_path_normalize(file_path),
             content_hash=content_hash
         )
 
