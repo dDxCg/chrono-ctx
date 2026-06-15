@@ -13,23 +13,24 @@ class ContextEntry:
     #Construct for local path
     def __init__(
             self, 
-            path: Path | None = None,
-            context_id: str | None = None, 
-            location: str | None = None, 
-            provider: str | None = None, 
-            content_hash: str | None = None
+            context_id: str, 
+            location: str, 
+            provider: str, 
+            content_hash: str 
             ):
-        if path is not None:
-            file_content = path.read_bytes()
-            self.content_hash = hash(file_content)
-            self.context_id = gen_ulid()
-            self.location = path
-            self.provider = 'local'
-        else:
             self.context_id = context_id
             self.location = location
             self.provider = provider
             self.content_hash = content_hash
+
+    @classmethod
+    def from_path(cls, path: Path):
+        file_content = Path(path).read_bytes()
+        content_hash = hash(file_content)
+        context_id = gen_ulid()
+        location = path
+        provider = 'local'
+        return cls(context_id, location, provider, content_hash)
         
 @dataclass
 class Location:

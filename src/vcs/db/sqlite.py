@@ -2,16 +2,15 @@ import sqlite3
 from src.vcs.shared.types import Query
 
 class DBHandler:
-    def __init__(self, db_url=None, conn=None):
-        self.db_url = db_url
+    def __init__(self, conn=None):
         self.conn = conn
 
-    def connect(self):
-        if self.conn is None:
-            self.conn = sqlite3.connect(self.db_url)
+    @classmethod
+    def from_url(cls, db_url):
+        conn = sqlite3.connect(db_url)
+        return cls(conn)
             
     def execute(self, query: Query, commit: bool = True):
-        self.connect()
         cursor = self.conn.cursor()
         if query.params:
             cursor.execute(query.query, query.params)

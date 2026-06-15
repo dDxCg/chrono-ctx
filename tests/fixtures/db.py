@@ -14,7 +14,7 @@ def db_handler():
 
     conn.executescript(schema)
 
-    yield DBHandler(db_url=None, conn=conn)
+    yield DBHandler(conn=conn)
 
     conn.close()
 

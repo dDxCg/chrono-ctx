@@ -1,5 +1,6 @@
 import time
 import logging
+
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from src.utils.formatter import normalize_event
@@ -55,7 +56,7 @@ class WatchWorker:
         self.observer.stop()
         self.observer.join()
 
-    def run_forever(self):
+    def run(self):
         try:
             self.start()
             while True:
@@ -64,13 +65,13 @@ class WatchWorker:
             self.stop()
 
 
-if __name__ == "__main__":
-    setup_logger(level=logging.INFO)
-    watch_worker = WatchWorker()
-    src_path = "knowledge.example"
+# if __name__ == "__main__":
+#     setup_logger(level=logging.INFO)
+#     watch_worker = WatchWorker()
+#     src_path = "knowledge.example"
     
-    def sample_callback(event: SourceEvent):
-        print(event)
+#     def sample_callback(event: SourceEvent):
+#         print(event)
 
-    watch_worker.add_watch(path=src_path, callback=sample_callback)
-    watch_worker.run_forever()
+#     watch_worker.add_watch(path=src_path, callback=sample_callback)
+#     watch_worker.run()

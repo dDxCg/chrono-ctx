@@ -41,9 +41,9 @@ def append_context(db_handler: DBHandler, context_entry: ContextEntry):
         raise 
 
 @log_enabled
-def modify_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempFile) -> bool:
+def modified_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempFile) -> bool:
     context_id = _get_context_id_by_location(db_handler, event.src)
-    current_version = _check_current_version(context_id)
+    current_version = _check_current_version(db_handler, context_id)
     new_hash = _get_version_hash(db_handler, context_id, current_version)
     if _decide_to_append_version(tmp_file, content_hash=new_hash):
         version = Version(
@@ -59,18 +59,22 @@ def modify_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempFil
 
 #change old path + add new version via context id
 @log_enabled
-def move_handle(db_handler: DBHandler, event: MovedEvent, tmp_file = TempFile):
-    location = _change_location(db_handler, event.src, event.dst, commit=True)
-    sub_event = ModifiedEvent(event.provider, location)
-    modify_handle(db_handler, sub_event, tmp_file, commit=True)
+def moved_handle(db_handler: DBHandler, event: MovedEvent):
+    context_id = _get_context_id_by_location(db_handler, event.src)
+    update_path = Query(
+        query="UPDATE locations SET location = ? WHERE context_id = ?",
+        params = (event.dst, context_id)
+    )
+    db_handler.execute(update_path, commit=True)
+    
     
 @log_enabled
-def add_handle(db_handler: DBHandler, event: CreatedEvent):
-    context_entry = ContextEntry(event.src)
+def created_handle(db_handler: DBHandler, event: CreatedEvent):
+    context_entry = ContextEntry.from_path(event.src)
     append_context(db_handler, context_entry)
 
 @log_enabled
-def delete_handle(db_handler: DBHandler, event: DeletedEvent):
+def deleted_handle(db_handler: DBHandler, event: DeletedEvent):
     query = Query(
         query = "UPDATE locations SET status = 0 WHERE location = ?",
         params = (event.src,)
@@ -123,14 +127,6 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
     res = db_handler.execute(commit=False, query=get_context_id)
     return res[0][0]
 
-def _change_location(db_handler: DBHandler, prev_location: str, cur_location: str, commit: bool):
-    context_id = _get_context_id_by_location(db_handler, prev_location)
-    update_path = Query(
-        query="UPDATE locations SET location = ? WHERE context_id = ?",
-        params = (cur_location, context_id)
-    )
-    db_handler.execute(update_path, commit)
-    return cur_location
     
 def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
     upcoming_blob = tmp_file.read_bytes()

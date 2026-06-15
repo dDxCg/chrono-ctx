@@ -1,13 +1,19 @@
 from pathlib import Path
 import shutil
-from src.utils.helper import save_to_file, hash, make_dirs
+from src.utils.helper import save_to_file, hash, make_dirs, path_normalize, read_file
 
 class TempFile:
     TMP_DIR = Path("data/tmp")
     def __init__(self, content):
         make_dirs(self.TMP_DIR)
         self.path = Path(f"{self.TMP_DIR}/{hash(content)}.blob")
-        self.create_tmp_file(self, content)
+        self.create_tmp_file(content)
+
+    @classmethod
+    def from_path(cls, path, read_mode="rb"):
+        path = path_normalize(path)
+        content = read_file(path, mode=read_mode)
+        return cls(content)
 
     def create_tmp_file(self, content):
         if type(content) is bytes:

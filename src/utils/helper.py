@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 
-def load_db_url():
+def get_db_url():
     load_dotenv()
     MODE = os.getenv("MODE", "dev")
     if MODE == "dev":
@@ -14,6 +14,10 @@ def load_db_url():
     else:
         load_dotenv(".env.prod")
         return os.getenv("DATABASE_URL")
+    
+def get_config_path():
+    load_dotenv()
+    return os.getenv("CONFIG_PATH")
     
 def save_to_file(data, file_path, mode="wb"):
     with open(file_path, mode) as f:

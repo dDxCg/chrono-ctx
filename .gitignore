@@ -8,3 +8,5 @@ db-dev.sqlite
 __pycache__
 .pytest_cache
 .ruff_cache
+*/tmp
+requirements.in
