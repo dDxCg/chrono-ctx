@@ -3,15 +3,16 @@ from src.utils.logger import log_enabled
 from src.vcs.adapters.local_adapter import LocalAdapter
 from src.vcs.shared.config import BLOB_CONFIG
 from src.vcs.services.versioning import deactive_and_reactive_sources
+from src.utils.helper import get_db_url, get_config_path
 
 from pathlib import Path
 import yaml
 
 class Initializer:
-    def __init__(self, db_handler: DBHandler, config_path: Path):
-        self.db_handler = db_handler
-        self.config_path = Path(config_path)
-        self.sources = self._get_sources(config_path)
+    def __init__(self):
+        self.db_handler = DBHandler.from_url(get_db_url())
+        self.config_path = Path(get_config_path())
+        self.sources = self._get_sources(self.config_path)
 
     @log_enabled
     def process_config(self): 

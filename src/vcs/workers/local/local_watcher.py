@@ -4,16 +4,15 @@ import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from src.utils.formatter import normalize_event
-from src.vcs.shared.types import SourceEvent
-from src.utils.logger import setup_logger
 
 
 class WatchWorker:
-    def __init__(self, debounce=0.5):
+    def __init__(self, stop_event, debounce=0.5):
         self.observer = Observer()
         self.jobs = []
         self.debounce = debounce
         self.last_event = {}
+        self.stop_event = stop_event
 
     def _should_process(self, path):
         now = time.time()
@@ -57,12 +56,10 @@ class WatchWorker:
         self.observer.join()
 
     def run(self):
-        try:
-            self.start()
-            while True:
-                self.observer.join(1)
-        except KeyboardInterrupt:
-            self.stop()
+        self.start()
+        while not self.stop_event.is_set():
+            self.observer.join(1)
+        
 
 
 # if __name__ == "__main__":

@@ -16,6 +16,8 @@ def append_context(db_handler: DBHandler, context_entry: ContextEntry):
         context_id = _check_existed_location(db_handler, context_entry.location)
 
         db_handler.begin()
+        if context_id is not None:
+            _active_location_by_id(db_handler, context_id, commit=False)
         
         if context_id is None:
             context_id = context_entry.context_id
@@ -125,11 +127,15 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
         params = (location,)
     )
     res = db_handler.execute(commit=False, query=get_context_id)
+    print(f"???[RES]: {res}")
     return res[0][0]
 
     
 def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
     upcoming_blob = tmp_file.read_bytes()
+    current_blob_path = BLOB_ROOT / f"{content_hash}.blob"
+    if not current_blob_path.exists():
+        return True
     current_blob = (BLOB_ROOT / f"{content_hash}.blob").read_bytes()
     similarity = text_similarity(bytes_to_string(current_blob), bytes_to_string(upcoming_blob))
     if similarity < NEW_VERSION_THRESHOLD:
@@ -165,3 +171,10 @@ def _check_existed_location(db_handler: DBHandler, location: str):
         return res[0][0]
     return None
     
+
+def _active_location_by_id(db_handler: DBHandler, context_id, commit=False):
+    active_query = Query(
+        query="UPDATE locations SET status = 1 WHERE context_id=?",
+        params=(context_id,)
+    )
+    db_handler.execute(active_query, commit)

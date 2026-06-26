@@ -1,19 +1,12 @@
 from src.vcs.workers.local.local_watcher import WatchWorker
-from src.vcs.workers.local.local_queue import LocalQueue
-from src.vcs.workers.local.local_consumer import LocalConsumer, ConsumerWorker
-from src.vcs.db.sqlite import DBHandler
+from src.vcs.workers.local.local_consumer import LocalConsumerWorker
+from src.vcs.workers.local.utils import STOP
 
-STOP = object()
-
-class LocalRuntime:
-    def __init__(self, db_handler: DBHandler, sources):
-        self.watcher = WatchWorker()
-        self.queue = LocalQueue()
-        self.consumer = LocalConsumer(db_handler)
-        self.consumer_worker = ConsumerWorker(
-            self.queue,
-            self.consumer
-        )
+class LocalWorker:
+    def __init__(self, sources, stop_event):
+        self.watcher = WatchWorker(stop_event)
+        self.stop_event = stop_event
+        self.consumer_worker = LocalConsumerWorker(self.stop_event)
         self._init_worker(sources)
 
     def _init_worker(self, sources):
@@ -21,19 +14,22 @@ class LocalRuntime:
             if source["type"] == "local":
                 self.watcher.add_watch(
                     source["path"], 
-                    callback=self.queue.publish
+                    callback=self.consumer_worker.queue.publish
                 )
 
     def run(self):
-        self.consumer_worker.start()
         self.watcher.start()
+        self.consumer_worker.start()
+        # print(f"[LOCAL RUNTIME - STOP]: {self.stop_event}")
         try:
-            self.consumer_worker.join()
-
+            while not self.stop_event.is_set():
+                self.stop_event.wait(timeout=1.0)
         except KeyboardInterrupt:
             self.stop()
             
+  
     def stop(self):
+        self.stop_event.set()
         self.watcher.stop()
-        self.queue.publish(STOP)
+        self.consumer_worker.queue.publish(STOP)
         self.consumer_worker.join()
