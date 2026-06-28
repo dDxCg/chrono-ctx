@@ -69,3 +69,5 @@ def show_diff(
     check_diff(path, from_version, to_version)
 
 
+if __name__ == "__main__":
+    cli(prog_name="ctx")
