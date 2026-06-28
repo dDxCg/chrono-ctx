@@ -13,7 +13,7 @@ class VCSRuntime:
         
 
     def run(self):
-        self.init.process_config()
+        self.init.init()
 
         try:
             self.local_runtime.run()

@@ -1,13 +1,13 @@
 from pathlib import Path
 
 
-from utils.helper import collect_files, hash, gen_ulid, path_normalize
+from utils.helper import collect_files, gen_hash, gen_ulid, path_normalize
 from utils.logger import log_enabled
 
 from vcs.shared.config import BLOB_ROOT
 from vcs.shared.types import ContextEntry
 from vcs.db.sqlite import DBHandler
-from vcs.services.versioning import append_context
+from vcs.services.versioning import _append_context
 
 class LocalAdapter:
     def __init__(self, db_handler: DBHandler):
@@ -17,7 +17,7 @@ class LocalAdapter:
         if file_path is not Path:
             file_path = Path(file_path)
         file_content = file_path.read_bytes()
-        content_hash = hash(file_content)
+        content_hash = gen_hash(file_content)
         context_id = gen_ulid()
 
         context_entry = ContextEntry(
@@ -27,7 +27,7 @@ class LocalAdapter:
             content_hash=content_hash
         )
 
-        append_context(self.db_handler, context_entry)
+        _append_context(self.db_handler, context_entry)
         save_path = BLOB_ROOT / f"{content_hash}.blob"
         save_path.write_bytes(file_content)
 

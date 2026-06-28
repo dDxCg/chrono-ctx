@@ -4,6 +4,9 @@ from ulid import ULID
 from dotenv import load_dotenv
 from pathlib import Path
 
+def get_schema_path():
+    load_dotenv()
+    return os.getenv("SCHEMA_PATH", "data/schema.sql")
 
 def get_db_url():
     load_dotenv()
@@ -71,8 +74,17 @@ def text_similarity(text_1: str, text_2: str):
 def bytes_to_string(input: bytes):
     return input.decode("utf-8", errors="replace")
 
-def hash(input: str):
+def gen_hash(input: str):
     return hashlib.sha256(input).hexdigest()
 
 def gen_ulid():
     return str(ULID())
+
+def get_path_stats(path: Path):
+    path = Path(path_normalize(path))
+    stat = path.stat()
+    return {
+        "st_ino": str(stat.st_ino),
+        "st_dev": str(stat.st_dev)
+    }
+

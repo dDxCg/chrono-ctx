@@ -1,7 +1,7 @@
 from pathlib import Path
 import sqlite3
 import pytest
-from src.vcs.db.sqlite import DBHandler
+from vcs.db.sqlite import DBHandler
 from tests.fixtures.seed import Seeder
 
 @pytest.fixture

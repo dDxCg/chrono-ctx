@@ -1,7 +1,7 @@
-from src.vcs.services.versioning import deactive_and_reactive_sources
+from vcs.services.versioning import sync_source
 from tests.fixtures.seed import Seeder
-from src.vcs.db.sqlite import DBHandler
-from src.vcs.shared.types import Query
+from vcs.db.sqlite import DBHandler
+from vcs.shared.types import Query
 from unittest.mock import patch
 
 class TestSyncSourceStatus:
@@ -12,7 +12,7 @@ class TestSyncSourceStatus:
     ):
         seeder.seed_locations()
 
-        deactive_and_reactive_sources(
+        sync_source(
             db_handler,
             []
         )
@@ -47,7 +47,7 @@ class TestSyncSourceStatus:
                 "/root/b",
             ]
         ):
-            deactive_and_reactive_sources(
+            sync_source(
                 db_handler,
                 [
                     {"path": "/root"}

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "chrono-ctx"
 version = "0.1.0"
@@ -30,6 +34,9 @@ dev = [
     "pytest-cov",
     "ruff"
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app", "src/vcs"]
 
 [project.scripts]
 ctx = "app.cli.app:cli"

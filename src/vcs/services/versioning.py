@@ -3,34 +3,42 @@ from vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
 from utils.logger import log_enabled
 from vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, Version, ModifiedEvent
 from vcs.db.sqlite import DBHandler
-from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files
+from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files, get_path_stats
 from vcs.shared.temp_file import TempFile
 
 
 @log_enabled
-def append_context(db_handler: DBHandler, context_entry: ContextEntry):
+def _append_context(db_handler: DBHandler, context_entry: ContextEntry):
     try:
-        if _check_existed_version(db_handler, context_entry.content_hash):
-            return
-        
-        context_id = _check_existed_location(db_handler, context_entry.location)
+        location = context_entry.location
+        loc_stats = get_path_stats(location)
+        st_ino = loc_stats["st_ino"]
+        st_dev = loc_stats["st_dev"]
+        context_id = _check_existed_location(db_handler, location)
 
         db_handler.begin()
         if context_id is not None:
+            _sync_location(db_handler, location, commit=False)
             _active_location_by_id(db_handler, context_id, commit=False)
-        
-        if context_id is None:
+            if _check_existed_version(db_handler, context_id, context_entry.content_hash):
+                db_handler.commit()
+                return
+        else:
             context_id = context_entry.context_id
             add_context = Query(
                 query = "INSERT INTO contexts (context_id) VALUES (?)",
-                params = (context_entry.context_id,)
+                params = (context_id,)
             )
             add_location = Query(
-                query = "INSERT INTO locations (context_id, location, provider) VALUES (?, ?, ?)",
-                params = (context_entry.context_id, context_entry.location, context_entry.provider)
+                query = """INSERT INTO 
+                        locations (st_ino, st_dev, context_id, location, provider) 
+                        VALUES (?, ?, ?, ?, ?)""",
+                params = (st_ino, st_dev, context_id, context_entry.location, context_entry.provider)
             )
+            
             db_handler.execute(commit=False, query=add_context)
             db_handler.execute(commit=False, query=add_location)
+
 
         version_number = _check_current_version(db_handler, context_id)
         version = Version(version_number = version_number + 1, 
@@ -59,13 +67,15 @@ def modified_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempF
         tmp_file.delete_tmp_file()
     
 
-#change old path + add new version via context id
 @log_enabled
 def moved_handle(db_handler: DBHandler, event: MovedEvent):
-    context_id = _get_context_id_by_location(db_handler, event.src)
+    loc_stats = get_path_stats(event.dst)
+    st_ino = loc_stats["st_ino"]
+    st_dev = loc_stats["st_dev"]
+    context_id = _get_context_id_by_location(db_handler, event.dst)
     update_path = Query(
-        query="UPDATE locations SET location = ? WHERE context_id = ?",
-        params = (event.dst, context_id)
+        query="UPDATE locations SET location = ?, st_ino = ?, st_dev = ? WHERE context_id = ?",
+        params=(event.dst, st_ino, st_dev, context_id),
     )
     db_handler.execute(update_path, commit=True)
     
@@ -73,7 +83,7 @@ def moved_handle(db_handler: DBHandler, event: MovedEvent):
 @log_enabled
 def created_handle(db_handler: DBHandler, event: CreatedEvent):
     context_entry = ContextEntry.from_path(event.src)
-    append_context(db_handler, context_entry)
+    _append_context(db_handler, context_entry)
 
 @log_enabled
 def deleted_handle(db_handler: DBHandler, event: DeletedEvent):
@@ -84,7 +94,7 @@ def deleted_handle(db_handler: DBHandler, event: DeletedEvent):
     db_handler.execute(commit=True, query=query)
 
 @log_enabled
-def deactive_and_reactive_sources(db_handler: DBHandler, sources):
+def sync_source(db_handler: DBHandler, sources):
     try:
         db_handler.begin()
         deactive_all = Query(
@@ -93,15 +103,18 @@ def deactive_and_reactive_sources(db_handler: DBHandler, sources):
         db_handler.execute(deactive_all, commit=False)
         for source in sources:
             source_path = path_normalize(source["path"])
-            # print(f"[PATH] {source_path}")
             file_paths = collect_files(source_path)
-            # print(f"[COLLECT]: {file_paths}")
             for path in file_paths:
-                reactive_query = Query(
-                    query = "UPDATE locations SET status = 1 WHERE location = ?",
-                    params = (path,)
+                loc_stats = get_path_stats(path)
+                st_ino = loc_stats["st_ino"]
+                st_dev = loc_stats["st_dev"]
+                sync_query = Query(
+                    query = """UPDATE locations 
+                            SET location = ?, status = 1 
+                            WHERE st_ino = ? AND st_dev = ?""",
+                    params = (path, st_ino, st_dev)
                 )
-                db_handler.execute(reactive_query, commit=False)
+                db_handler.execute(sync_query, commit=False)
         db_handler.commit()
     except Exception:
         db_handler.rollback()
@@ -124,9 +137,12 @@ def _append_version(db_handler: DBHandler, version: Version, commit: bool):
     db_handler.execute(commit=commit, query=create_version)
 
 def _get_context_id_by_location(db_handler: DBHandler, location: str):
+    loc_stats = get_path_stats(location)
+    st_ino = loc_stats["st_ino"]
+    st_dev = loc_stats["st_dev"]
     get_context_id = Query(
-        query = "SELECT context_id FROM locations WHERE location = ?",
-        params = (location,)
+        query = "SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
+        params = (st_ino, st_dev)
     )
     res = db_handler.execute(commit=False, query=get_context_id)
     return res[0][0] if res else None
@@ -152,20 +168,23 @@ def _get_version_hash(db_handler: DBHandler, context_id: str, version_number: in
     return res[0][0] if res else None
 
 
-def _check_existed_version(db_handler: DBHandler, content_hash: str) -> bool:
+def _check_existed_version(db_handler: DBHandler, context_id: str, content_hash: str) -> bool:
     check_content_hash = Query(
-        query = """SELECT c.context_id 
-                FROM contexts c JOIN versions v ON c.context_id = v.context_id 
-                WHERE v.content_hash = ?""",
-        params = (content_hash,)
+        query = """SELECT 1
+                FROM versions 
+                WHERE context_id = ? AND content_hash = ?""",
+        params = (context_id, content_hash)
     )
     result = db_handler.execute(commit=False, query=check_content_hash)
     return bool(result)
 
 def _check_existed_location(db_handler: DBHandler, location: str):
+    loc_stats = get_path_stats(location)
+    st_ino = loc_stats["st_ino"]
+    st_dev = loc_stats["st_dev"]
     check_path = Query(
-        query="SELECT context_id FROM locations WHERE location = ?",
-        params = (location,)
+        query="SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
+        params = (st_ino, st_dev)
     )
     res = db_handler.execute(commit=False, query = check_path)
     if res:
@@ -179,3 +198,14 @@ def _active_location_by_id(db_handler: DBHandler, context_id, commit=False):
         params=(context_id,)
     )
     db_handler.execute(active_query, commit)
+
+def _sync_location(db_handler: DBHandler, location: str, commit=False):
+    loc_stats = get_path_stats(location)
+    st_ino = loc_stats["st_ino"]
+    st_dev = loc_stats["st_dev"]
+    sync_location_query = Query(
+        query="UPDATE locations SET location = ? WHERE st_ino = ? AND st_dev = ?",
+        params = (location, st_ino, st_dev)
+    )
+    db_handler.execute(sync_location_query, commit=commit)
+

@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock, patch
-from src.vcs.services.versioning import deactive_and_reactive_sources
+from vcs.services.versioning import sync_source
 
 class TestSyncSourceStatus:
     @patch("src.vcs.services.versioning.collect_files")
@@ -17,7 +17,7 @@ class TestSyncSourceStatus:
             "/normalized/source1/file2.py",
         ]
 
-        deactive_and_reactive_sources(db_handler, sources)
+        sync_source(db_handler, sources)
 
         db_handler.begin.assert_called_once()
         db_handler.commit.assert_called_once()
@@ -54,7 +54,7 @@ class TestSyncSourceStatus:
         mock_collect.side_effect = Exception("collect failed")
 
         try:
-            deactive_and_reactive_sources(db_handler, sources)
+            sync_source(db_handler, sources)
             assert False, "Exception should be raised"
         except Exception:
             pass
@@ -83,7 +83,7 @@ class TestSyncSourceStatus:
             ["/normalized/b/f2.py", "/normalized/b/f3.py"],
         ]
 
-        deactive_and_reactive_sources(db_handler, sources)
+        sync_source(db_handler, sources)
 
         # 1 deactivate + 3 reactive updates
         assert db_handler.execute.call_count == 4

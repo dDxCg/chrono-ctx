@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from src.utils.helper import gen_ulid
+from src.utils.helper import gen_ulid, gen_hash
 
 @dataclass
 class ContextEntry:
@@ -26,7 +26,7 @@ class ContextEntry:
     @classmethod
     def from_path(cls, path: Path):
         file_content = Path(path).read_bytes()
-        content_hash = hash(file_content)
+        content_hash = gen_hash(file_content)
         context_id = gen_ulid()
         location = path
         provider = 'local'

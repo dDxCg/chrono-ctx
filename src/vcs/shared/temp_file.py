@@ -1,12 +1,12 @@
 from pathlib import Path
 import shutil
-from src.utils.helper import save_to_file, hash, make_dirs, path_normalize, read_file
+from src.utils.helper import save_to_file, gen_hash, make_dirs, path_normalize, read_file
 
 class TempFile:
     TMP_DIR = Path("data/tmp")
     def __init__(self, content):
         make_dirs(self.TMP_DIR)
-        self.path = Path(f"{self.TMP_DIR}/{hash(content)}.blob")
+        self.path = Path(f"{self.TMP_DIR}/{gen_hash(content)}.blob")
         self.create_tmp_file(content)
 
     @classmethod

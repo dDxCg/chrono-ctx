@@ -1,5 +1,5 @@
-from src.vcs.db.sqlite import DBHandler
-from src.vcs.shared.types import Query
+from vcs.db.sqlite import DBHandler
+from vcs.shared.types import Query
 
 class Seeder:
     BASIC_CONTEXTS = [
