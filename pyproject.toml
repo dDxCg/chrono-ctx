@@ -22,3 +22,11 @@ dependencies = [
     "urllib3>=2.7.0",
     "watchdog>=6.0.0",
 ]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff"
+]
