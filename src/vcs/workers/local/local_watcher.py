@@ -3,7 +3,7 @@ import logging
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from src.utils.formatter import normalize_event
+from utils.formatter import normalize_event
 
 
 class WatchWorker:

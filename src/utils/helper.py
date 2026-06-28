@@ -32,10 +32,17 @@ def read_file(file_path: str, mode: str = 'rb'):
 def collect_files(path: str) -> list[Path]:
     path = path_normalize(path)
     p = Path(path).resolve()
+
+    if not p.exists():
+        return []
+
     if p.is_file():
         return [path_normalize(p)]
+
     if p.is_dir():
         return [path_normalize(f) for f in p.rglob("*") if f.is_file()]
+
+    return []
 
 def path_normalize(path: str) -> str:
     p = Path(path).expanduser()

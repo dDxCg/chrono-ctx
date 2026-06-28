@@ -1,10 +1,10 @@
 
-from src.vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
-from src.utils.logger import log_enabled
-from src.vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, Version, ModifiedEvent
-from src.vcs.db.sqlite import DBHandler
-from src.utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files
-from src.vcs.shared.temp_file import TempFile
+from vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
+from utils.logger import log_enabled
+from vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, Version, ModifiedEvent
+from vcs.db.sqlite import DBHandler
+from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files
+from vcs.shared.temp_file import TempFile
 
 
 @log_enabled
@@ -93,7 +93,9 @@ def deactive_and_reactive_sources(db_handler: DBHandler, sources):
         db_handler.execute(deactive_all, commit=False)
         for source in sources:
             source_path = path_normalize(source["path"])
+            # print(f"[PATH] {source_path}")
             file_paths = collect_files(source_path)
+            # print(f"[COLLECT]: {file_paths}")
             for path in file_paths:
                 reactive_query = Query(
                     query = "UPDATE locations SET status = 1 WHERE location = ?",
@@ -127,8 +129,7 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
         params = (location,)
     )
     res = db_handler.execute(commit=False, query=get_context_id)
-    print(f"???[RES]: {res}")
-    return res[0][0]
+    return res[0][0] if res else None
 
     
 def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
@@ -148,7 +149,7 @@ def _get_version_hash(db_handler: DBHandler, context_id: str, version_number: in
         params = (context_id, version_number)
     )
     res = db_handler.execute(commit=False, query=get_content_hash)
-    return res[0][0]
+    return res[0][0] if res else None
 
 
 def _check_existed_version(db_handler: DBHandler, content_hash: str) -> bool:

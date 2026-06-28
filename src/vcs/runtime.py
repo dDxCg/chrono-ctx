@@ -1,9 +1,9 @@
 import logging
 import threading
 
-from src.vcs.workers.local.local_runtime import LocalWorker
-from src.vcs.initialize import Initializer
-from src.utils.logger import setup_logger
+from vcs.workers.local.local_runtime import LocalWorker
+from vcs.initialize import Initializer
+from utils.logger import setup_logger
 
 class VCSRuntime:
     def __init__(self):

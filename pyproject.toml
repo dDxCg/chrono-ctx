@@ -30,3 +30,6 @@ dev = [
     "pytest-cov",
     "ruff"
 ]
+
+[project.scripts]
+ctx = "app.cli.app:cli"

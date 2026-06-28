@@ -1,6 +1,6 @@
-from src.vcs.workers.local.local_watcher import WatchWorker
-from src.vcs.workers.local.local_consumer import LocalConsumerWorker
-from src.vcs.workers.local.utils import STOP
+from vcs.workers.local.local_watcher import WatchWorker
+from vcs.workers.local.local_consumer import LocalConsumerWorker
+from vcs.workers.local.utils import STOP
 
 class LocalWorker:
     def __init__(self, sources, stop_event):

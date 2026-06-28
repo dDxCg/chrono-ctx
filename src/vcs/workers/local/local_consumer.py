@@ -1,14 +1,14 @@
 import threading
 
-from src.vcs.shared.types import SourceEvent, MovedEvent, ModifiedEvent, DeletedEvent, CreatedEvent
-from src.vcs.services.versioning import moved_handle, modified_handle, deleted_handle, created_handle
-from src.vcs.db.sqlite import DBHandler
-from src.vcs.shared.temp_file import TempFile
-from src.vcs.workers.local.local_queue import LocalQueue
+from vcs.shared.types import SourceEvent, MovedEvent, ModifiedEvent, DeletedEvent, CreatedEvent
+from vcs.services.versioning import moved_handle, modified_handle, deleted_handle, created_handle
+from vcs.db.sqlite import DBHandler
+from vcs.shared.temp_file import TempFile
+from vcs.workers.local.local_queue import LocalQueue
 
-from src.utils.helper import get_db_url
-from src.utils.logger import log_enabled
-from src.vcs.workers.local.utils import STOP
+from utils.helper import get_db_url
+from utils.logger import log_enabled
+from vcs.workers.local.utils import STOP
 
 
 class LocalConsumer:

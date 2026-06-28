@@ -1,5 +1,5 @@
 import sqlite3
-from src.vcs.shared.types import Query
+from vcs.shared.types import Query
 
 class DBHandler:
     def __init__(self, conn=None):

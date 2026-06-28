@@ -1,7 +1,7 @@
 from queue import Queue
-from src.vcs.shared.types import SourceEvent
-from src.utils.logger import log_enabled
-from src.vcs.workers.local.utils import STOP
+from vcs.shared.types import SourceEvent
+from utils.logger import log_enabled
+from vcs.workers.local.utils import STOP
 
 
 class LocalQueue():

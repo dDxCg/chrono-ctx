@@ -1,6 +1,6 @@
 from watchdog.events import FileSystemEvent, FileCreatedEvent, FileDeletedEvent, FileModifiedEvent, FileMovedEvent, DirMovedEvent, DirDeletedEvent 
-from src.vcs.shared.types import CreatedEvent, DeletedEvent, ModifiedEvent, MovedEvent
-from src.utils.helper import path_normalize
+from vcs.shared.types import CreatedEvent, DeletedEvent, ModifiedEvent, MovedEvent
+from utils.helper import path_normalize
 
 def normalize_event(event: FileSystemEvent):
     if not event.src_path:

@@ -10,4 +10,4 @@ __pycache__
 .ruff_cache
 */tmp
 requirements.in
-chrono_ctx.egg-info
+*.egg-info

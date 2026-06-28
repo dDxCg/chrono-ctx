@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Annotated
 import typer
 
-from src.vcs.services.configure import add_sources, remove_sources, health_check
-from src.vcs.services.audit import get_sources, rollback_source, get_version_list, check_diff
+from vcs.services.configure import add_sources, remove_sources, health_check
+from vcs.services.audit import get_sources, rollback_source, get_version_list, check_diff
 
 cli = typer.Typer(name = "ctx")
 sources_cli = typer.Typer()

@@ -1,3 +1,26 @@
-# Sample 3
+name: CI
 
-This is the content of sample file 3.
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+
+jobs:
+
+  test:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+

@@ -1,9 +1,9 @@
-from src.vcs.db.sqlite import DBHandler
-from src.utils.logger import log_enabled
-from src.vcs.adapters.local_adapter import LocalAdapter
-from src.vcs.shared.config import BLOB_CONFIG
-from src.vcs.services.versioning import deactive_and_reactive_sources
-from src.utils.helper import get_db_url, get_config_path
+from vcs.db.sqlite import DBHandler
+from utils.logger import log_enabled
+from vcs.adapters.local_adapter import LocalAdapter
+from vcs.shared.config import BLOB_CONFIG
+from vcs.services.versioning import deactive_and_reactive_sources
+from utils.helper import get_db_url, get_config_path
 
 from pathlib import Path
 import yaml
@@ -21,6 +21,7 @@ class Initializer:
         (BLOB_CONFIG / "config.blob").write_bytes(file_content)
 
         #Fetch status with config sources
+        print(self.sources)
         deactive_and_reactive_sources(self.db_handler, sources=self.sources)
 
         for source in self.sources:
