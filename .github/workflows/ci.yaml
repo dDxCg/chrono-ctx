@@ -42,7 +42,7 @@ jobs:
 
       - name: Ruff
         run: |
-          uv ruff check . --fix 
+          uv run ruff check . --fix 
 
       - name: Run Tests
         run: |
