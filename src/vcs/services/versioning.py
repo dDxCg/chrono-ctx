@@ -1,5 +1,5 @@
 
-from vcs.shared.config import BLOB_ROOT, NEW_VERSION_THRESHOLD
+from vcs.shared.config import BLOB_DIR, NEW_VERSION_THRESHOLD
 from utils.logger import log_enabled
 from vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, Version, ModifiedEvent
 from vcs.db.sqlite import DBHandler
@@ -53,6 +53,9 @@ def _append_context(db_handler: DBHandler, context_entry: ContextEntry):
 @log_enabled
 def modified_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempFile) -> bool:
     context_id = _get_context_id_by_location(db_handler, event.src)
+    if context_id is None:
+        create_event = CreatedEvent(src=event.src)
+        return created_handle(db_handler, create_event)
     current_version = _check_current_version(db_handler, context_id)
     new_hash = _get_version_hash(db_handler, context_id, current_version)
     if _decide_to_append_version(tmp_file, content_hash=new_hash):
@@ -62,7 +65,7 @@ def modified_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempF
             content_hash=new_hash
         )
         _append_version(db_handler, version, commit=True)
-        tmp_file.move_tmp_file(BLOB_ROOT / f"{new_hash}.blob")
+        tmp_file.move_tmp_file(BLOB_DIR / f"{new_hash}.blob")
     else:
         tmp_file.delete_tmp_file()
     
@@ -94,7 +97,7 @@ def deleted_handle(db_handler: DBHandler, event: DeletedEvent):
     db_handler.execute(commit=True, query=query)
 
 @log_enabled
-def sync_source(db_handler: DBHandler, sources):
+def sync_source_status(db_handler: DBHandler, sources):
     try:
         db_handler.begin()
         deactive_all = Query(
@@ -150,10 +153,10 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
     
 def _decide_to_append_version(tmp_file: TempFile, content_hash: str) -> bool:
     upcoming_blob = tmp_file.read_bytes()
-    current_blob_path = BLOB_ROOT / f"{content_hash}.blob"
+    current_blob_path = BLOB_DIR / f"{content_hash}.blob"
     if not current_blob_path.exists():
         return True
-    current_blob = (BLOB_ROOT / f"{content_hash}.blob").read_bytes()
+    current_blob = (BLOB_DIR / f"{content_hash}.blob").read_bytes()
     similarity = text_similarity(bytes_to_string(current_blob), bytes_to_string(upcoming_blob))
     if similarity < NEW_VERSION_THRESHOLD:
         return True

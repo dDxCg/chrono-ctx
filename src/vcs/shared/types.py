@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from src.utils.helper import gen_ulid, gen_hash
+
+from utils.helper import gen_ulid, gen_hash, get_config_path, path_normalize
 
 @dataclass
 class ContextEntry:
@@ -73,4 +74,20 @@ class DeletedEvent(SourceEvent):
 class MovedEvent(SourceEvent):
     type: str = field(init=False, default="moved")
     dst: str
+
+@dataclass
+class ConfigCreatedEvent(CreatedEvent):
+    src = path_normalize(get_config_path())
+
+@dataclass
+class ConfigModifiedEvent(ModifiedEvent):
+    src = path_normalize(get_config_path())
+
+@dataclass
+class ConfigMovedEvent(MovedEvent):
+    src = path_normalize(get_config_path())
+
+@dataclass
+class ConfigDeletedEvent(DeletedEvent):
+    src = path_normalize(get_config_path())
 

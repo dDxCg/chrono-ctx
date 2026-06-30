@@ -4,7 +4,7 @@ from pathlib import Path
 from utils.helper import collect_files, gen_hash, gen_ulid, path_normalize
 from utils.logger import log_enabled
 
-from vcs.shared.config import BLOB_ROOT
+from vcs.shared.config import BLOB_DIR
 from vcs.shared.types import ContextEntry
 from vcs.db.sqlite import DBHandler
 from vcs.services.versioning import _append_context
@@ -28,7 +28,7 @@ class LocalAdapter:
         )
 
         _append_context(self.db_handler, context_entry)
-        save_path = BLOB_ROOT / f"{content_hash}.blob"
+        save_path = BLOB_DIR / f"{content_hash}.blob"
         save_path.write_bytes(file_content)
 
     def local_directory_processing(self, dir_path):

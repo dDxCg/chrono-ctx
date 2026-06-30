@@ -9,3 +9,7 @@ class EventBroker(ABC):
     @abstractmethod
     def consume(self):
         pass
+
+    @abstractmethod
+    def close(self):
+        pass

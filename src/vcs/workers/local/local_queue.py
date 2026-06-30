@@ -1,11 +1,13 @@
 from queue import Queue
 from vcs.shared.types import SourceEvent
 from utils.logger import log_enabled
-from vcs.workers.local.utils import STOP
+from vcs.workers.utils import STOP
+from vcs.workers.interfaces.event_broker import EventBroker
 
 
-class LocalQueue():
+class LocalQueue(EventBroker):
     def __init__(self):
+        super().__init__()
         self.queue = Queue()
         self.closed = False
 

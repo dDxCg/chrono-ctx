@@ -1,32 +1,34 @@
 from vcs.db.sqlite import DBHandler
-from utils.logger import log_enabled
 from vcs.adapters.local_adapter import LocalAdapter
-from vcs.shared.config import BLOB_CONFIG
-from vcs.services.versioning import sync_source
+from vcs.shared.config import create_dirs
+
+from vcs.services.versioning import sync_source_status
 from vcs.services.db import init_db
+from vcs.services.configure import init_config_file
+from vcs.services.configure import store_config_snapshot
+
 from utils.helper import get_db_url, get_config_path
+from utils.logger import log_enabled
 
 from pathlib import Path
 import yaml
 
-
-
 class Initializer:
     def __init__(self):
         self.db_handler = DBHandler.from_url(get_db_url())
-        self.config_path = Path(get_config_path())
-        self.sources = self._get_sources(self.config_path)
+        self.sources = self._get_sources(get_config_path())
+        
 
-    #TODO: live apply config changes
     @log_enabled
-    def init(self): 
+    def init(self):
+        create_dirs()
+
         self._init_schema()
+        init_config_file()
 
-        file_content = self.config_path.read_bytes()
-        (BLOB_CONFIG / "config.blob").write_bytes(file_content)
-
+        store_config_snapshot()
         #Fetch status with config sources
-        sync_source(self.db_handler, sources=self.sources)
+        sync_source_status(self.db_handler, sources=self.sources)
 
         for source in self.sources:
             if source["type"] == "local":

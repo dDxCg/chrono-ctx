@@ -1,12 +1,14 @@
 from pathlib import Path
-from src.utils.helper import make_dirs
 
-BLOB_ROOT = Path("data/blobs")
-BLOB_CONFIG = BLOB_ROOT / "configs"
-
-make_dirs(
-    BLOB_ROOT, 
-    BLOB_CONFIG
-)
-
+SNAPSHOT_DIR = Path("data/snapshots")
+BLOB_DIR = SNAPSHOT_DIR / "blobs"
+CONFIG_SNAPSHOT_DIR = SNAPSHOT_DIR / "configs"
+CONFIG_SNAPSHOT_FILE = CONFIG_SNAPSHOT_DIR / "config.yaml"
 NEW_VERSION_THRESHOLD = 0.9
+
+def create_dirs():
+    BLOB_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+if __name__ == "__main__":
+    create_dirs()

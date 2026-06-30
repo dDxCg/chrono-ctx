@@ -11,3 +11,4 @@ __pycache__
 */tmp
 requirements.in
 *.egg-info
+data/snapshots

@@ -24,3 +24,12 @@ jobs:
           - "3.13"
           - "3.14"
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      

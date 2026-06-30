@@ -1,12 +1,37 @@
+from vcs.workers.local.local_consumer import LocalConsumer
+from vcs.workers.local.local_queue import LocalQueue
 from vcs.workers.local.local_watcher import WatchWorker
-from vcs.workers.local.local_consumer import LocalConsumerWorker
-from vcs.workers.local.utils import STOP
+from vcs.workers.consumer_worker import ConsumerWorker
+from vcs.workers.config.config_consumer import ConfigConsumer, ConfigConsumerWorker
+from vcs.workers.utils import STOP
 
-class LocalWorker:
-    def __init__(self, sources, stop_event):
-        self.watcher = WatchWorker(stop_event)
+class LocalRuntime:
+    def __init__(self, sources, stop_event, watcher=None, queue=None):
         self.stop_event = stop_event
-        self.consumer_worker = LocalConsumerWorker(self.stop_event)
+        
+        if watcher:
+            self.watcher = watcher
+        else:
+            self.watcher = WatchWorker(self.stop_event)
+        
+        self.consumer_worker = ConsumerWorker(
+            self.stop_event, 
+            queue=queue 
+        )
+
+        if queue:
+            self.queue = queue
+        else:
+            self.queue = self.consumer_worker.queue
+
+        self.config_consumer_worker = ConfigConsumerWorker(
+            self.stop_event,
+            queue=self.queue,
+            runtime=self
+        )
+        
+        
+        
         self._init_worker(sources)
 
     def _init_worker(self, sources):
@@ -16,11 +41,13 @@ class LocalWorker:
                     source["path"], 
                     callback=self.consumer_worker.queue.publish
                 )
+        
 
     def run(self):
         self.watcher.start()
         self.consumer_worker.start()
-        # print(f"[LOCAL RUNTIME - STOP]: {self.stop_event}")
+        self.config_consumer_worker.start()
+        
         try:
             while not self.stop_event.is_set():
                 self.stop_event.wait(timeout=1.0)
@@ -31,5 +58,6 @@ class LocalWorker:
     def stop(self):
         self.stop_event.set()
         self.watcher.stop()
-        self.consumer_worker.queue.publish(STOP)
+        self.queue.publish(STOP)
         self.consumer_worker.join()
+        self.config_consumer_worker.join()

@@ -10,10 +10,10 @@ class Seeder:
     ]
 
     BASIC_LOCATIONS = [
-            ("/root", "ctx0", 1),
-            ("/root/a", "ctx1", 1),
-            ("/root/b", "ctx2", 1),
-            ("/other", "ctx3", 1),
+            (0, 1, "/root", "ctx0", 1),
+            (1, 1, "/root/a", "ctx1", 1),
+            (2, 1, "/root/b", "ctx2", 1),
+            (3, 1, "/other", "ctx3", 1),
         ]
 
     BASIC_VERSIONS = [
@@ -30,18 +30,20 @@ class Seeder:
     def seed_locations(self, rows=None):
         rows = rows or self.BASIC_LOCATIONS
 
-        for location, context_id, status in rows:
+        for st_ino, st_dev, location, context_id, status in rows:
             self.db_handler.execute(
                 Query(
                     """
                     INSERT INTO locations(
+                        st_ino,
+                        st_dev,
                         location,
                         context_id,
                         status
                     )
-                    VALUES (?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
-                    (location, context_id, status)
+                    (st_ino, st_dev, location, context_id, status)
                 )
             )
 

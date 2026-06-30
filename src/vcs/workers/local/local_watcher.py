@@ -46,6 +46,13 @@ class WatchWorker:
         self.observer.schedule(Handler(), path, recursive=recursive)
         self.jobs.append((path, callback))
 
+    def remove_watch(self, path):
+        """Stops watching a specific path."""
+        watch_token = self.jobs.pop(path, None)
+        if watch_token:
+            self.observer.unschedule(watch_token)
+            logging.info(f"[WATCH] Removed watch for {path}")
+
     def start(self):
         logging.info("WatchWorker starting...")
         self.observer.start()
@@ -61,14 +68,3 @@ class WatchWorker:
             self.observer.join(1)
         
 
-
-# if __name__ == "__main__":
-#     setup_logger(level=logging.INFO)
-#     watch_worker = WatchWorker()
-#     src_path = "knowledge.example"
-    
-#     def sample_callback(event: SourceEvent):
-#         print(event)
-
-#     watch_worker.add_watch(path=src_path, callback=sample_callback)
-#     watch_worker.run()

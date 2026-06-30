@@ -1,29 +1,29 @@
 import logging
 import threading
 
-from vcs.workers.local.local_runtime import LocalWorker
+from vcs.workers.local.local_runtime import LocalRuntime
+from vcs.workers.local.local_queue import LocalQueue
 from vcs.initialize import Initializer
 from utils.logger import setup_logger
 
 class VCSRuntime:
     def __init__(self):
         self.stop_event = threading.Event()
-        self.init = Initializer()
-        self.local_runtime = LocalWorker(self.init.sources, self.stop_event)
-        
+        self.initializer = Initializer()
+        self.queue = LocalQueue()
+        self.local_runtime = LocalRuntime(self.initializer.sources, self.stop_event, queue=self.queue)
 
     def run(self):
-        self.init.init()
+        self.initializer.init()
 
         try:
             self.local_runtime.run()
         except KeyboardInterrupt:
-            print("Stopping...")
+            logging.info("Stopping VCS Runtime...")
             self.stop()
 
     def stop(self):
         self.stop_event.set()
-        print(f"RUNTIME - STOP: {self.stop_event}")
         self.local_runtime.stop()
 
 
