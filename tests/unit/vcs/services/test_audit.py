@@ -5,7 +5,7 @@ import vcs.services.audit as audit
 import vcs.services.mirror_path as mirror_path
 from vcs.services import git_store
 from vcs.shared.types import Query
-from utils.helper import get_path_stats
+from utils.helper import get_device_id, get_path_stats
 
 
 @pytest.fixture(autouse=True)
@@ -23,10 +23,10 @@ def _insert_location(db_handler, path, context_id, status=1):
     stats = get_path_stats(str(path))
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, provider, status)
-        VALUES (?, ?, ?, ?, 'local', ?)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, provider, status)
+        VALUES (?, ?, ?, ?, ?, 'local', ?)
         """,
-        (stats["st_ino"], stats["st_dev"], str(path), context_id, status),
+        (stats["st_ino"], stats["st_dev"], get_device_id(), str(path), context_id, status),
     ))
 
 

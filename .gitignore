@@ -18,3 +18,4 @@ data/repo
 data/ctx.pid
 data/ctx.log
 data/mcp.log
+data/device_id

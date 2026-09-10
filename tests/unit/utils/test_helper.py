@@ -232,6 +232,21 @@ def test_ac6_get_db_url_still_honors_explicit_database_url(monkeypatch, tmp_path
     assert get_db_url() == str(tmp_path / "explicit.sqlite")
 
 
+def test_ac2_get_device_id_is_stable_across_calls_and_process_restart(monkeypatch, tmp_path):
+    """Spec 041: same value in-process (cache), and the same value after
+    a simulated restart (cache cleared, file on disk read back)."""
+    monkeypatch.setattr(helper, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(helper, "_device_id_cache", None)
+
+    first = helper.get_device_id()
+    second = helper.get_device_id()
+    assert first == second
+
+    monkeypatch.setattr(helper, "_device_id_cache", None)
+    after_restart = helper.get_device_id()
+    assert after_restart == first
+
+
 def test_ac1_get_schema_path_resolves_via_importlib_resources_when_unset(monkeypatch):
     """schema.sql is packaged code (spec 030), not PROJECT_ROOT-anchored
     user data - must resolve correctly regardless of cwd/PROJECT_ROOT."""

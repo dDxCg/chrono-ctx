@@ -127,6 +127,30 @@ def is_packaged_install() -> bool:
     return not _is_source_checkout(_EDITABLE_CANDIDATE)
 
 
+_device_id_cache: str | None = None
+
+
+def get_device_id() -> str:
+    """Stable per-installation device identity (spec 041) - a ULID
+    generated once and persisted at anchored("data/device_id"), so
+    (st_ino, st_dev) pairs from different devices never collide once
+    locations rows from more than one device can reach the same store
+    (the enterprise draft's Option A thin client). Cached in-process
+    after the first call; the file on disk is what survives a restart."""
+    global _device_id_cache
+    if _device_id_cache is not None:
+        return _device_id_cache
+
+    path = Path(anchored("data/device_id"))
+    if path.is_file():
+        _device_id_cache = path.read_text(encoding=DEFAULT_ENCODING).strip()
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _device_id_cache = gen_ulid()
+        path.write_text(_device_id_cache, encoding=DEFAULT_ENCODING)
+    return _device_id_cache
+
+
 def get_stop_sentinel_path():
     """`ctx daemon stop`'s console-less fallback (spec 033) - written when
     the CTRL_BREAK_EVENT/SIGTERM signal itself can't be delivered (e.g. no
