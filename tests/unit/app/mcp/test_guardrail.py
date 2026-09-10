@@ -518,6 +518,49 @@ async def test_ac2_tool_call_logs_entry_and_exit_with_the_path_but_not_content(s
 
 
 @pytest.mark.anyio
+async def test_ac2_ac4_tool_call_emits_a_span_and_leaves_the_file_log_unchanged(
+    source_dir, monkeypatch, caplog
+):
+    """Spec 039 AC-2: a successful call produces one span named after the
+    tool, carrying chrono_ctx.path and chrono_ctx.status. AC-4: the file
+    log (spec 038 AC-2) is byte-for-byte the same whether OTel is wired up
+    or not - same assertions as the log-only test above, run again with a
+    real tracer attached."""
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    import app.mcp.telemetry as telemetry
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = telemetry._RealTracer(provider.get_tracer("test"))
+    monkeypatch.setattr(server, "get_tracer", lambda: tracer)
+
+    target = source_dir / "doc.txt"
+
+    with caplog.at_level(logging.INFO):
+        async with Client(server.mcp, elicitation_handler=_fail_if_called) as client:
+            await client.call_tool(
+                "create_file", {"path": str(target), "content": "SECRET-CONTENT-MARKER"}
+            )
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "create_file" in text
+    assert "doc.txt" in text
+    assert "SECRET-CONTENT-MARKER" not in text
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "create_file"
+    assert spans[0].attributes["chrono_ctx.path"] == str(target)
+    assert spans[0].attributes["chrono_ctx.status"] == "ok"
+
+
+@pytest.mark.anyio
 async def test_ac3_set_actor_hint_uses_a_short_timeout_not_the_30s_default(source_dir, monkeypatch):
     """Spec 038 AC-3: waiting 30s for bookkeeping the code is explicitly
     willing to skip is the wrong trade - it adds up to 30s to a call that

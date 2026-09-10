@@ -9,6 +9,7 @@ from pathlib import Path
 from fastmcp import Context, FastMCP
 
 from app.mcp.guardrail import ensure_scope
+from app.mcp.telemetry import get_tracer
 from utils.helper import anchored, get_db_url, read_text_file, save_to_file
 from vcs.db.sqlite import DBHandler
 from vcs.services.actor_hints import set_hint
@@ -51,30 +52,40 @@ def _setup_file_logging() -> None:
 
 def _logged_tool(func):
     """Entry/exit with elapsed time, so a future hang is diagnosable from
-    the log alone - which one wasn't, before spec 038.
+    the log alone - which one wasn't, before spec 038. Also opens an OTel
+    span around the same call (spec 039) - a second sink for the same
+    facts, not new instrumentation: `data/mcp.log`'s content is unchanged
+    either way.
 
     Paths only, never content: these are the user's context sources, and
     logging arguments would turn this file into a plaintext copy of every
-    watched document.
+    watched document. Same rule for span attributes.
     """
     @wraps(func)
     async def wrapper(*args, **kwargs):
         target = kwargs.get("path") or kwargs.get("src") or ""
+        dst = kwargs.get("dst")
         logging.info("[MCP] %s start path=%s", func.__name__, target)
         start = time.monotonic()
-        try:
-            result = await func(*args, **kwargs)
-        except Exception:
-            logging.exception(
-                "[MCP] %s raised after %.3fs path=%s",
-                func.__name__, time.monotonic() - start, target,
+        with get_tracer().start_as_current_span(func.__name__) as span:
+            span.set_attribute("chrono_ctx.path", target)
+            if dst:
+                span.set_attribute("chrono_ctx.dst", dst)
+            try:
+                result = await func(*args, **kwargs)
+            except Exception as e:
+                logging.exception(
+                    "[MCP] %s raised after %.3fs path=%s",
+                    func.__name__, time.monotonic() - start, target,
+                )
+                span.record_exception(e)
+                raise
+            logging.info(
+                "[MCP] %s done status=%s in %.3fs path=%s",
+                func.__name__, result.get("status"), time.monotonic() - start, target,
             )
-            raise
-        logging.info(
-            "[MCP] %s done status=%s in %.3fs path=%s",
-            func.__name__, result.get("status"), time.monotonic() - start, target,
-        )
-        return result
+            span.set_attribute("chrono_ctx.status", result.get("status"))
+            return result
     return wrapper
 
 
