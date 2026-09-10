@@ -57,15 +57,15 @@ def test_ac1_list_sources_returns_tracked_locations(client, db_handler, config_p
     tracked = source_dir / "doc.txt"
     tracked.write_text("hello")
     from vcs.shared.types import Query
-    from utils.helper import get_path_stats
+    from utils.helper import get_device_id, get_path_stats
     db_handler.execute(Query("INSERT INTO contexts (context_id) VALUES (?)", ("ctx-1",)))
     stats = get_path_stats(str(tracked))
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, provider, status)
-        VALUES (?, ?, ?, ?, 'local', 1)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, provider, status)
+        VALUES (?, ?, ?, ?, ?, 'local', 1)
         """,
-        (stats["st_ino"], stats["st_dev"], str(tracked), "ctx-1"),
+        (stats["st_ino"], stats["st_dev"], get_device_id(), str(tracked), "ctx-1"),
     ))
 
     response = client.get("/v1/sources")

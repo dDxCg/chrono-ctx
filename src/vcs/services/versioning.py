@@ -5,7 +5,7 @@ from vcs.shared.config import NEW_VERSION_THRESHOLD
 from utils.logger import log_enabled
 from vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, ModifiedEvent
 from vcs.db.sqlite import DBHandler
-from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files, get_path_stats
+from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files, get_path_stats, get_device_id
 from vcs.shared.temp_file import TempFile
 from vcs.services import git_store
 from vcs.services.configure import derive_watch_targets, is_path_in_scope
@@ -58,9 +58,9 @@ def _append_context(db_handler: DBHandler, context_entry: ContextEntry, watch_ta
             )
             add_location = Query(
                 query = """INSERT INTO
-                        locations (st_ino, st_dev, context_id, location, provider)
-                        VALUES (?, ?, ?, ?, ?)""",
-                params = (st_ino, st_dev, context_id, context_entry.location, context_entry.provider)
+                        locations (st_ino, st_dev, device_id, context_id, location, provider)
+                        VALUES (?, ?, ?, ?, ?, ?)""",
+                params = (st_ino, st_dev, get_device_id(), context_id, context_entry.location, context_entry.provider)
             )
 
             db_handler.execute(commit=False, query=add_context)
@@ -294,10 +294,10 @@ def sync_source_status(db_handler: DBHandler, sources):
                 st_ino = loc_stats["st_ino"]
                 st_dev = loc_stats["st_dev"]
                 sync_query = Query(
-                    query = """UPDATE locations 
-                            SET location = ?, status = 1 
-                            WHERE st_ino = ? AND st_dev = ?""",
-                    params = (path, st_ino, st_dev)
+                    query = """UPDATE locations
+                            SET location = ?, status = 1
+                            WHERE st_ino = ? AND st_dev = ? AND device_id = ?""",
+                    params = (path, st_ino, st_dev, get_device_id())
                 )
                 db_handler.execute(sync_query, commit=False)
         db_handler.commit()
@@ -311,8 +311,8 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     get_context_id = Query(
-        query = "SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
-        params = (st_ino, st_dev)
+        query = "SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (st_ino, st_dev, get_device_id())
     )
     res = db_handler.execute(commit=False, query=get_context_id)
     return res[0][0] if res else None
@@ -323,8 +323,8 @@ def _check_existed_location(db_handler: DBHandler, location: str):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     check_path = Query(
-        query="SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
-        params = (st_ino, st_dev)
+        query="SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (st_ino, st_dev, get_device_id())
     )
     res = db_handler.execute(commit=False, query = check_path)
     if res:
@@ -344,8 +344,8 @@ def _sync_location(db_handler: DBHandler, location: str, commit=False):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     sync_location_query = Query(
-        query="UPDATE locations SET location = ? WHERE st_ino = ? AND st_dev = ?",
-        params = (location, st_ino, st_dev)
+        query="UPDATE locations SET location = ? WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (location, st_ino, st_dev, get_device_id())
     )
     db_handler.execute(sync_location_query, commit=commit)
 

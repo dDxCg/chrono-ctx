@@ -17,6 +17,7 @@ from vcs.services.versioning import (
 )
 from vcs.shared.temp_file import TempFile
 from vcs.shared.types import CreatedEvent, DeletedEvent, ModifiedEvent, MovedEvent, Query
+import vcs.services.versioning as versioning
 from utils.helper import get_path_stats, path_normalize
 
 
@@ -50,12 +51,11 @@ def _insert_location(db_handler, path, context_id):
     stats = get_path_stats(str(path))
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES (?, ?, ?, ?, 1)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES (?, ?, ?, ?, ?, 1)
         """,
-        (stats["st_ino"], stats["st_dev"], str(path), context_id),
+        (stats["st_ino"], stats["st_dev"], versioning.get_device_id(), str(path), context_id),
     ))
-    return stats
     return stats
 
 
@@ -525,10 +525,10 @@ def test_sync_source_status_deactivates_missing_and_reactivates_present(db_handl
     _insert_context(db_handler, "ctx-gone")
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES ('999', '999', ?, ?, 1)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES ('999', '999', ?, ?, ?, 1)
         """,
-        ("gone/path", "ctx-gone"),
+        (versioning.get_device_id(), "gone/path", "ctx-gone"),
     ))
 
     sync_source_status(db_handler, sources=[{"type": "local", "path": str(tmp_path)}])
@@ -690,6 +690,39 @@ def test_ac7_reconcile_dropped_sources_commit_carries_ctx_actor_trailer(db_handl
     assert "Ctx-Actor: startup:reconcile" in _full_message(repo_path, relpath)
 
 
+# --- spec 041: device-scoped location identity -----------------------------
+
+
+def test_ac5_locations_are_scoped_per_device_id(db_handler, tmp_path, monkeypatch):
+    """Two devices that happen to reuse the same (st_ino, st_dev) pair for
+    unrelated files must not see each other's location row."""
+    watched = tmp_path / "doc.txt"
+    watched.write_text("hello")
+
+    monkeypatch.setattr(versioning, "get_device_id", lambda: "device-a")
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+    context_a = versioning._check_existed_location(db_handler, str(watched))
+    assert context_a is not None
+
+    monkeypatch.setattr(versioning, "get_device_id", lambda: "device-b")
+    assert versioning._check_existed_location(db_handler, str(watched)) is None
+
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+    context_b = versioning._check_existed_location(db_handler, str(watched))
+    assert context_b is not None
+    assert context_b != context_a
+
+    loc_stats = get_path_stats(str(watched))
+    rows = db_handler.execute(
+        Query(
+            "SELECT device_id, context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
+            (loc_stats["st_ino"], loc_stats["st_dev"]),
+        ),
+        commit=False,
+    )
+    assert dict(rows) == {"device-a": context_a, "device-b": context_b}
+
+
 def test_ac1_reconcile_dropped_sources_removes_mirror_content_for_dropped_location(db_handler, tmp_path):
     dropped_file = tmp_path / "dropped.txt"
     dropped_file.write_text("bye")
@@ -750,10 +783,10 @@ def test_active_locations_returns_only_status_one_rows(db_handler, tmp_path):
     _insert_context(db_handler, "ctx-inactive")
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES ('111', '111', ?, ?, 0)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES ('111', '111', ?, ?, ?, 0)
         """,
-        ("inactive/path", "ctx-inactive"),
+        (versioning.get_device_id(), "inactive/path", "ctx-inactive"),
     ))
 
     result = active_locations(db_handler)

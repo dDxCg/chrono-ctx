@@ -1,3 +1,4 @@
+from utils.helper import get_device_id
 from vcs.db.sqlite import DBHandler
 from vcs.shared.types import Query
 
@@ -37,13 +38,14 @@ class Seeder:
                     INSERT INTO locations(
                         st_ino,
                         st_dev,
+                        device_id,
                         location,
                         context_id,
                         status
                     )
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (st_ino, st_dev, location, context_id, status)
+                    (st_ino, st_dev, get_device_id(), location, context_id, status)
                 )
             )
 
