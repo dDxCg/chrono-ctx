@@ -37,11 +37,12 @@ single-machine by construction today:
 1. **File identity is an inode.** `locations (st_ino, st_dev PK, …)` —
    spec 003/006. Inode numbers are meaningful only on the filesystem
    that issued them. Across 200 laptops they collide freely and mean
-   nothing. This is the deepest change in the list: identity has to
-   become server-issued (`context_id` as the real PK) with
-   `(tenant, device, logical_path)` as the lookup key, and `st_ino/st_dev`
-   demoted to a *client-local* hint used only by a sync agent to detect
-   local renames.
+   nothing. **Shipped** (spec [041](../../specs/041-device-scoped-location-identity.md),
+   2026-09-10, decided to do now rather than defer to phase 2 —
+   designing it twice costs more than once): `locations` PK is now
+   `(device_id, st_ino, st_dev)`, `device_id` a ULID minted once per
+   install and persisted at `data/device_id` (gitignored). Open
+   questions this raised, not yet settled: Part 1.5 below.
 2. **The MCP server writes the local filesystem.** `write_file` is
    `open()` + write. Centrally, it has to write the server's content
    store instead — MCP becomes a content API over logical paths, not a
@@ -52,7 +53,7 @@ single-machine by construction today:
    path's entire design.
 4. **Scope lives in a per-machine `config.yaml`.** Enterprise policy has
    to be central and per-tenant, and the MCP elicitation flow (spec
-   013/§6.3) currently *persists an approval into that local file*. A
+   013/§6.5) currently *persists an approval into that local file*. A
    remote server persisting scope means one user's approval widens scope
    for whoever shares that tenant — a real authorization decision, not a
    port of existing behavior.
@@ -62,6 +63,11 @@ single-machine by construction today:
    not harder: the writer is authenticated at the API boundary, so the
    actor is known at write time and the hint table disappears for the
    MCP path (it stays only if a client-side watcher path survives).
+   The commit-side half of this shipped early (spec
+   [040](../../specs/040-ctx-actor-commit-trailer.md) — `Ctx-Actor:`
+   trailer on every mirror commit) using whatever `event.actor` already
+   is today; a cheap near-term bridge for the *value* of that field
+   before real auth exists is in Part 1.5 below.
 6. **Auth is one shared `X-API-Key`, no caller identity** (spec 018, and
    already flagged as a known gap in ARCHITECTURE §8). Attribution that
    an auditor can trust needs per-user identity — SSO/OIDC for humans,
@@ -75,6 +81,62 @@ single-machine by construction today:
 What *doesn't* break, and is worth saying explicitly: the git mirror
 model, `audit.py`, the diff/history read surface, the versioning gate,
 and rollback all stay as they are. They were already server-shaped.
+
+## Part 1.5 — identity questions raised by spec 041, not yet settled
+
+Three decisions surfaced while shipping the device-identity refactor,
+none blocking, all worth deciding deliberately before phase 2/5 rather
+than defaulting into an answer.
+
+**1. Device reset = new device, on purpose. Is that acceptable?**
+`get_device_id()` mints a ULID and persists it at `data/device_id` —
+deliberately *not* derived from hostname or hardware (a disk swap or
+rename must not look like a new device). Consequence: if the machine
+itself is reset (OS reinstall, disk wipe) and only that file is lost,
+`locations` rows under the old `device_id` become orphaned bookkeeping
+(harmless locally — see spec 041's existing-row-impact reasoning, git
+history is path-keyed and untouched) but the *central* store (once it
+exists, phase 5's thin client) would see this as a brand-new,
+unenrolled device, losing continuity of "this is still Alice's laptop."
+**Open question:** does phase 5 need a re-enrollment flow (admin merges
+a new `device_id` back into a known identity), or is "reset = re-enroll
+from scratch" an acceptable policy? Leaning toward the latter unless a
+real deployment says otherwise — re-enrollment is real complexity for a
+rare event, and a reset machine re-populating `locations` from a normal
+disk scan is not data loss, just a bookkeeping reset.
+
+**2. IP address considered and rejected as identity — a security/audit
+signal instead.** IP fails the exact property device identity needs:
+DHCP reassigns it, NAT puts many devices behind one address, VPN and
+network roaming change it more often than a laptop gets reset. It also
+doesn't exist as a concept in today's stdio-only single-machine mode (no
+network hop at all). Where it *is* real value: phase 2's authenticated
+write API can log the source IP alongside the authenticated principal
+as audit metadata (anomaly detection, rate limiting) — a column next to
+identity, never a substitute for it.
+
+**3. Manual `configured:<email>` actor identity — a cheap bridge before
+phase 2's real auth exists.** Today `_resolve_actor()` falls back to
+`unknown:filesystem` for any edit the daemon's watchdog sees without an
+MCP hint or CLI-supplied actor — i.e. every ordinary human edit made
+through a normal editor. A per-install configured identity (a
+`config.yaml` field or `CHRONO_CTX_ACTOR_EMAIL` env var) plugs that gap
+cheaply: `_resolve_actor()`'s fallback becomes the configured value
+instead of `unknown:filesystem`. **Explicitly self-reported, not
+authenticated** — same trust level as today's `cli:jane`, spoofable by
+anyone who can edit that machine's config. Worth a label prefix that
+keeps the trust level legible downstream (in the `Ctx-Actor` trailer,
+in audit output) rather than letting a configured guess and a verified
+identity look the same:
+
+```
+configured:alice@corp    - self-reported, config.yaml/env, spoofable
+sso:alice@corp            - phase 2, authenticated at the API boundary
+agent:<session_id>        - MCP hint, unchanged
+```
+
+Small, additive, no schema change — a candidate for its own near-term
+spec, independent of phase 1/2's schema and auth work.
 
 ## Part 2 — target topology
 

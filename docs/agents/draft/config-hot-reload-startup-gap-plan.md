@@ -1,10 +1,20 @@
 # Draft — config hot-reload: close the startup gap
 
-Status: draft, not started. README/README.vi mark "Config hot-reload" as
-**In progress**, not Done — this is the concrete reason why, found by reading
-`vcs/initialize.py` against what the *running-daemon* path
-(`ConfigConsumer`, see [ARCHITECTURE.md](../../ARCHITECTURE.md) §4.3)
-actually does.
+Status: **resolved**. Closed by spec
+[026](../../specs/026-startup-scope-departure-reconcile.md)
+(`reconcile_dropped_sources`), which implements exactly this draft's
+"Recommended fix" section below — snapshot the previously-active locations
+before `sync_source_status()` flips anything, diff against what's still
+active after, and `git_store.remove()` each departed path under the
+`startup:reconcile` actor label this draft proposed. Kept here for the
+trail, not as an open gap — see
+[ARCHITECTURE.md §6.3](../../../ARCHITECTURE.md#63-config-hot-reload) for
+where the shipped flow is documented.
+
+Original framing, preserved below: README/README.vi used to mark "Config
+hot-reload" as **In progress**, not Done — this was the concrete reason why,
+found by reading `vcs/initialize.py` against what the *running-daemon* path
+(`ConfigConsumer`) actually did.
 
 ## The gap, confirmed by reading the code
 
