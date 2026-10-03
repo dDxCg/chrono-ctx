@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 import app.cli.app as cli_app
 import vcs.services.mirror_path as mirror_path
 from vcs.services import git_store
-from utils.helper import get_path_stats
+from utils.helper import get_device_id, get_path_stats
 
 runner = CliRunner()
 
@@ -46,10 +46,10 @@ def _seed_location(db_path, location, context_id="ctx-1", status=1):
     conn.execute("INSERT INTO contexts (context_id) VALUES (?)", (context_id,))
     conn.execute(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, provider, status)
-        VALUES (?, ?, ?, ?, 'local', ?)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, provider, status)
+        VALUES (?, ?, ?, ?, ?, 'local', ?)
         """,
-        (stats["st_ino"], stats["st_dev"], location, context_id, status),
+        (stats["st_ino"], stats["st_dev"], get_device_id(), location, context_id, status),
     )
     conn.commit()
     conn.close()

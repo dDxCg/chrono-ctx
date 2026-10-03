@@ -17,6 +17,7 @@ from vcs.services.versioning import (
 )
 from vcs.shared.temp_file import TempFile
 from vcs.shared.types import CreatedEvent, DeletedEvent, ModifiedEvent, MovedEvent, Query
+import vcs.services.versioning as versioning
 from utils.helper import get_path_stats, path_normalize
 
 
@@ -50,12 +51,11 @@ def _insert_location(db_handler, path, context_id):
     stats = get_path_stats(str(path))
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES (?, ?, ?, ?, 1)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES (?, ?, ?, ?, ?, 1)
         """,
-        (stats["st_ino"], stats["st_dev"], str(path), context_id),
+        (stats["st_ino"], stats["st_dev"], versioning.get_device_id(), str(path), context_id),
     ))
-    return stats
     return stats
 
 
@@ -525,10 +525,10 @@ def test_sync_source_status_deactivates_missing_and_reactivates_present(db_handl
     _insert_context(db_handler, "ctx-gone")
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES ('999', '999', ?, ?, 1)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES ('999', '999', ?, ?, ?, 1)
         """,
-        ("gone/path", "ctx-gone"),
+        (versioning.get_device_id(), "gone/path", "ctx-gone"),
     ))
 
     sync_source_status(db_handler, sources=[{"type": "local", "path": str(tmp_path)}])
@@ -536,6 +536,191 @@ def test_sync_source_status_deactivates_missing_and_reactivates_present(db_handl
     rows = dict(db_handler.execute(Query("SELECT context_id, status FROM locations"), commit=False))
     assert rows["ctx-kept"] == 1
     assert rows["ctx-gone"] == 0
+
+
+# --- spec 040: Ctx-Actor commit trailer -----------------------------------
+#
+# git's subject (%s) is everything up to the first blank line; the trailer
+# lives in the body after it, so %s stays exactly what it is today and %B
+# (full message) gains the structured line.
+
+
+def _full_message(repo_path, relpath):
+    log = subprocess.run(
+        ["git", "-C", str(repo_path), "log", "-1", "--format=%B"],
+        capture_output=True, text=True, check=True,
+    )
+    return log.stdout
+
+
+def _subject(repo_path, relpath):
+    log = subprocess.run(
+        ["git", "-C", str(repo_path), "log", "-1", "--format=%s"],
+        capture_output=True, text=True, check=True,
+    )
+    return log.stdout.strip()
+
+
+def test_ac1_created_handle_commit_carries_ctx_actor_trailer(db_handler, tmp_path):
+    watched = tmp_path / "doc.txt"
+    watched.write_text("hello")
+
+    created_handle(
+        db_handler, CreatedEvent(src=str(watched), actor="cli:jane"),
+        watch_targets=[str(tmp_path)],
+    )
+
+    repo_path, relpath = mirror_path.resolve_mirror_location(str(watched), [str(tmp_path)])
+    assert _subject(repo_path, relpath) == "created doc.txt via cli:jane"
+    assert "Ctx-Actor: cli:jane" in _full_message(repo_path, relpath)
+
+
+def test_ac2_modified_handle_commit_carries_ctx_actor_trailer(db_handler, tmp_path):
+    watched = tmp_path / "doc.txt"
+    watched.write_text("hello")
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+
+    new_text = "a totally different payload with enough new words to drop similarity"
+    watched.write_text(new_text)
+    tmp_file = TempFile.from_path(str(watched))
+    modified_handle(
+        db_handler, ModifiedEvent(src=str(watched), actor="cli:jane"), tmp_file,
+        watch_targets=[str(tmp_path)],
+    )
+
+    repo_path, relpath = mirror_path.resolve_mirror_location(str(watched), [str(tmp_path)])
+    assert _subject(repo_path, relpath) == "modified doc.txt via cli:jane"
+    assert "Ctx-Actor: cli:jane" in _full_message(repo_path, relpath)
+
+
+def test_ac3_moved_handle_same_repo_commit_carries_ctx_actor_trailer(db_handler, tmp_path, config_path):
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(f"sources:\n  - type: local\n    path: {path_normalize(tmp_path)}\n")
+
+    original = tmp_path / "orig.txt"
+    original.write_text("data")
+    created_handle(db_handler, CreatedEvent(src=str(original)), watch_targets=[str(tmp_path)])
+
+    renamed = tmp_path / "renamed.txt"
+    original.rename(renamed)
+    moved_handle(
+        db_handler, MovedEvent(src=str(original), dst=str(renamed), actor="cli:jane"),
+        watch_targets=[str(tmp_path)],
+    )
+
+    repo_path, dst_relpath = mirror_path.resolve_mirror_location(str(renamed), [str(tmp_path)])
+    assert _subject(repo_path, dst_relpath) == "moved orig.txt to renamed.txt via cli:jane"
+    assert "Ctx-Actor: cli:jane" in _full_message(repo_path, dst_relpath)
+
+
+def test_ac4_moved_handle_cross_repo_commits_both_carry_ctx_actor_trailer(db_handler, tmp_path, config_path):
+    source_a = tmp_path / "a"
+    source_a.mkdir()
+    source_b = tmp_path / "b"
+    source_b.mkdir()
+    watch_targets = [str(source_a), str(source_b)]
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        f"sources:\n"
+        f"  - type: local\n    path: {path_normalize(source_a)}\n"
+        f"  - type: local\n    path: {path_normalize(source_b)}\n"
+    )
+
+    original = source_a / "doc.txt"
+    original.write_text("cross-repo data")
+    created_handle(db_handler, CreatedEvent(src=str(original)), watch_targets=watch_targets)
+
+    moved = source_b / "doc.txt"
+    original.rename(moved)
+    moved_handle(
+        db_handler, MovedEvent(src=str(original), dst=str(moved), actor="cli:jane"),
+        watch_targets=watch_targets,
+    )
+
+    src_repo, src_relpath = mirror_path.resolve_mirror_location(str(original), watch_targets)
+    dst_repo, dst_relpath = mirror_path.resolve_mirror_location(str(moved), watch_targets)
+    assert "Ctx-Actor: cli:jane" in _full_message(dst_repo, dst_relpath)
+    assert "Ctx-Actor: cli:jane" in _full_message(src_repo, src_relpath)
+
+
+def test_ac5_moved_handle_out_of_scope_commit_carries_ctx_actor_trailer(db_handler, tmp_path, config_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(f"sources:\n  - type: local\n    path: {path_normalize(root)}\n")
+
+    original = root / "doc.txt"
+    original.write_text("leaving scope")
+    created_handle(db_handler, CreatedEvent(src=str(original)), watch_targets=[str(root)])
+
+    outside = tmp_path / "outside" / "doc.txt"
+    moved_handle(
+        db_handler, MovedEvent(src=str(original), dst=str(outside), actor="cli:jane"),
+        watch_targets=[str(root)],
+    )
+
+    repo_path, relpath = mirror_path.resolve_mirror_location(str(original), [str(root)])
+    assert "Ctx-Actor: cli:jane" in _full_message(repo_path, relpath)
+
+
+def test_ac6_deleted_handle_commit_carries_ctx_actor_trailer(db_handler, tmp_path):
+    watched = tmp_path / "doc.txt"
+    watched.write_text("hello")
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+
+    deleted_handle(
+        db_handler, DeletedEvent(src=str(watched), actor="cli:jane"),
+        watch_targets=[str(tmp_path)],
+    )
+
+    repo_path, relpath = mirror_path.resolve_mirror_location(str(watched), [str(tmp_path)])
+    assert _subject(repo_path, relpath) == "deleted doc.txt via cli:jane"
+    assert "Ctx-Actor: cli:jane" in _full_message(repo_path, relpath)
+
+
+def test_ac7_reconcile_dropped_sources_commit_carries_ctx_actor_trailer(db_handler, tmp_path):
+    dropped_file = tmp_path / "dropped.txt"
+    dropped_file.write_text("bye")
+    created_handle(db_handler, CreatedEvent(src=str(dropped_file)), watch_targets=[str(tmp_path)])
+
+    reconcile_dropped_sources(db_handler, [str(dropped_file)], [str(tmp_path)])
+
+    repo_path, relpath = mirror_path.resolve_mirror_location(str(dropped_file), [str(tmp_path)])
+    assert "Ctx-Actor: startup:reconcile" in _full_message(repo_path, relpath)
+
+
+# --- spec 041: device-scoped location identity -----------------------------
+
+
+def test_ac5_locations_are_scoped_per_device_id(db_handler, tmp_path, monkeypatch):
+    """Two devices that happen to reuse the same (st_ino, st_dev) pair for
+    unrelated files must not see each other's location row."""
+    watched = tmp_path / "doc.txt"
+    watched.write_text("hello")
+
+    monkeypatch.setattr(versioning, "get_device_id", lambda: "device-a")
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+    context_a = versioning._check_existed_location(db_handler, str(watched))
+    assert context_a is not None
+
+    monkeypatch.setattr(versioning, "get_device_id", lambda: "device-b")
+    assert versioning._check_existed_location(db_handler, str(watched)) is None
+
+    created_handle(db_handler, CreatedEvent(src=str(watched)), watch_targets=[str(tmp_path)])
+    context_b = versioning._check_existed_location(db_handler, str(watched))
+    assert context_b is not None
+    assert context_b != context_a
+
+    loc_stats = get_path_stats(str(watched))
+    rows = db_handler.execute(
+        Query(
+            "SELECT device_id, context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
+            (loc_stats["st_ino"], loc_stats["st_dev"]),
+        ),
+        commit=False,
+    )
+    assert dict(rows) == {"device-a": context_a, "device-b": context_b}
 
 
 def test_ac1_reconcile_dropped_sources_removes_mirror_content_for_dropped_location(db_handler, tmp_path):
@@ -598,10 +783,10 @@ def test_active_locations_returns_only_status_one_rows(db_handler, tmp_path):
     _insert_context(db_handler, "ctx-inactive")
     db_handler.execute(Query(
         """
-        INSERT INTO locations (st_ino, st_dev, location, context_id, status)
-        VALUES ('111', '111', ?, ?, 0)
+        INSERT INTO locations (st_ino, st_dev, device_id, location, context_id, status)
+        VALUES ('111', '111', ?, ?, ?, 0)
         """,
-        ("inactive/path", "ctx-inactive"),
+        (versioning.get_device_id(), "inactive/path", "ctx-inactive"),
     ))
 
     result = active_locations(db_handler)

@@ -1,5 +1,6 @@
 config.yaml
 docs/note/*
+docs/agents/*
 data/blobs/*
 .venv*
 .env.*
@@ -18,3 +19,5 @@ data/repo
 data/ctx.pid
 data/ctx.log
 data/mcp.log
+data/device_id
+AGENTS.md

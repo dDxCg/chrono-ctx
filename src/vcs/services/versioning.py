@@ -5,11 +5,20 @@ from vcs.shared.config import NEW_VERSION_THRESHOLD
 from utils.logger import log_enabled
 from vcs.shared.types import CreatedEvent, ContextEntry, DeletedEvent, MovedEvent, Query, ModifiedEvent
 from vcs.db.sqlite import DBHandler
-from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files, get_path_stats
+from utils.helper import text_similarity, bytes_to_string, path_normalize, collect_files, get_path_stats, get_device_id
 from vcs.shared.temp_file import TempFile
 from vcs.services import git_store
 from vcs.services.configure import derive_watch_targets, is_path_in_scope
 from vcs.services.mirror_path import resolve_mirror_location, PathNotWatchedError
+
+def _with_actor_trailer(summary: str, actor_label: str) -> str:
+    """summary\n\nCtx-Actor: {actor_label} (spec 040) - git's own
+    blank-line-separated trailer convention, so `%s` (subject, everything
+    up to the first blank line) is exactly the existing free-text summary,
+    unchanged, while `%B` (full message) gains a structured field a
+    downstream tool can parse without regexing the summary sentence."""
+    return f"{summary}\n\nCtx-Actor: {actor_label}"
+
 
 def _resolve_actor(event) -> tuple[str, str]:
     """(label, git-author-string) for event.actor, defaulting to the
@@ -49,9 +58,9 @@ def _append_context(db_handler: DBHandler, context_entry: ContextEntry, watch_ta
             )
             add_location = Query(
                 query = """INSERT INTO
-                        locations (st_ino, st_dev, context_id, location, provider)
-                        VALUES (?, ?, ?, ?, ?)""",
-                params = (st_ino, st_dev, context_id, context_entry.location, context_entry.provider)
+                        locations (st_ino, st_dev, device_id, context_id, location, provider)
+                        VALUES (?, ?, ?, ?, ?, ?)""",
+                params = (st_ino, st_dev, get_device_id(), context_id, context_entry.location, context_entry.provider)
             )
 
             db_handler.execute(commit=False, query=add_context)
@@ -65,7 +74,8 @@ def _append_context(db_handler: DBHandler, context_entry: ContextEntry, watch_ta
     git_store.init_repo(repo_path)
     git_store.write(
         repo_path, relpath, Path(location).read_bytes(),
-        message=f"created {relpath} via {actor_label}", author=author,
+        message=_with_actor_trailer(f"created {relpath} via {actor_label}", actor_label),
+        author=author,
     )
 
 @log_enabled
@@ -88,7 +98,8 @@ def modified_handle(db_handler: DBHandler, event: ModifiedEvent, tmp_file: TempF
     actor_label, author = _resolve_actor(event)
     git_store.write(
         repo_path, relpath, new_content,
-        message=f"modified {relpath} via {actor_label}", author=author,
+        message=_with_actor_trailer(f"modified {relpath} via {actor_label}", actor_label),
+        author=author,
     )
     tmp_file.delete_tmp_file()
 
@@ -153,7 +164,9 @@ def moved_handle(db_handler: DBHandler, event: MovedEvent, watch_targets: list[s
         # Recorded as a departure, the same way a delete is.
         git_store.remove(
             src_repo_path, src_relpath,
-            message=f"moved out of scope: {src_relpath} to {event.dst} via {actor_label}",
+            message=_with_actor_trailer(
+                f"moved out of scope: {src_relpath} to {event.dst} via {actor_label}", actor_label
+            ),
             author=author,
         )
         return
@@ -161,7 +174,10 @@ def moved_handle(db_handler: DBHandler, event: MovedEvent, watch_targets: list[s
     if src_repo_path == dst_repo_path:
         git_store.move(
             src_repo_path, src_relpath, dst_relpath,
-            message=f"moved {src_relpath} to {dst_relpath} via {actor_label}", author=author,
+            message=_with_actor_trailer(
+                f"moved {src_relpath} to {dst_relpath} via {actor_label}", actor_label
+            ),
+            author=author,
         )
     else:
         # git mv can't span two repos - write the content into the
@@ -172,11 +188,13 @@ def moved_handle(db_handler: DBHandler, event: MovedEvent, watch_targets: list[s
         content = Path(event.dst).read_bytes()
         git_store.write(
             dst_repo_path, dst_relpath, content,
-            message=f"moved in from {src_relpath} via {actor_label}", author=author,
+            message=_with_actor_trailer(f"moved in from {src_relpath} via {actor_label}", actor_label),
+            author=author,
         )
         git_store.remove(
             src_repo_path, src_relpath,
-            message=f"moved out to {dst_relpath} via {actor_label}", author=author,
+            message=_with_actor_trailer(f"moved out to {dst_relpath} via {actor_label}", actor_label),
+            author=author,
         )
 
 
@@ -200,7 +218,11 @@ def deleted_handle(db_handler: DBHandler, event: DeletedEvent, watch_targets: li
     repo_path, relpath = resolve_mirror_location(event.src, watch_targets)
     git_store.init_repo(repo_path)
     actor_label, author = _resolve_actor(event)
-    git_store.remove(repo_path, relpath, message=f"deleted {relpath} via {actor_label}", author=author)
+    git_store.remove(
+        repo_path, relpath,
+        message=_with_actor_trailer(f"deleted {relpath} via {actor_label}", actor_label),
+        author=author,
+    )
 
 @log_enabled
 def current_version(path: str, watch_targets: list[str] | None = None) -> str | None:
@@ -249,7 +271,9 @@ def reconcile_dropped_sources(
         git_store.init_repo(repo_path)
         git_store.remove(
             repo_path, relpath,
-            message=f"left scope (dropped while offline): {relpath}",
+            message=_with_actor_trailer(
+                f"left scope (dropped while offline): {relpath}", STARTUP_RECONCILE_ACTOR_LABEL
+            ),
             author=STARTUP_RECONCILE_AUTHOR,
         )
 
@@ -270,10 +294,10 @@ def sync_source_status(db_handler: DBHandler, sources):
                 st_ino = loc_stats["st_ino"]
                 st_dev = loc_stats["st_dev"]
                 sync_query = Query(
-                    query = """UPDATE locations 
-                            SET location = ?, status = 1 
-                            WHERE st_ino = ? AND st_dev = ?""",
-                    params = (path, st_ino, st_dev)
+                    query = """UPDATE locations
+                            SET location = ?, status = 1
+                            WHERE st_ino = ? AND st_dev = ? AND device_id = ?""",
+                    params = (path, st_ino, st_dev, get_device_id())
                 )
                 db_handler.execute(sync_query, commit=False)
         db_handler.commit()
@@ -287,8 +311,8 @@ def _get_context_id_by_location(db_handler: DBHandler, location: str):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     get_context_id = Query(
-        query = "SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
-        params = (st_ino, st_dev)
+        query = "SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (st_ino, st_dev, get_device_id())
     )
     res = db_handler.execute(commit=False, query=get_context_id)
     return res[0][0] if res else None
@@ -299,8 +323,8 @@ def _check_existed_location(db_handler: DBHandler, location: str):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     check_path = Query(
-        query="SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ?",
-        params = (st_ino, st_dev)
+        query="SELECT context_id FROM locations WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (st_ino, st_dev, get_device_id())
     )
     res = db_handler.execute(commit=False, query = check_path)
     if res:
@@ -320,8 +344,8 @@ def _sync_location(db_handler: DBHandler, location: str, commit=False):
     st_ino = loc_stats["st_ino"]
     st_dev = loc_stats["st_dev"]
     sync_location_query = Query(
-        query="UPDATE locations SET location = ? WHERE st_ino = ? AND st_dev = ?",
-        params = (location, st_ino, st_dev)
+        query="UPDATE locations SET location = ? WHERE st_ino = ? AND st_dev = ? AND device_id = ?",
+        params = (location, st_ino, st_dev, get_device_id())
     )
     db_handler.execute(sync_location_query, commit=commit)
 
