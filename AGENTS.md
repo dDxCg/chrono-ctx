@@ -2,11 +2,12 @@
 
 Operating rules for AI coding agents in this repository.
 **Stack:** Python >=3.10 (repo pins 3.13, see `.python-version`) · Typer (CLI) ·
-FastMCP (MCP server) · raw `sqlite3` via `vcs/db/sqlite.py` (no ORM, no
-migrations — schema is `data/schema.sql`, applied once at init) · pytest ·
-ruff. No FastAPI is wired up yet (`app/api/server.py` is a stub, entirely
-commented out per README's "chưa triển khai" status) and no mypy is
-configured — do not assume either exists until a spec explicitly adds it.
+FastMCP (MCP server, optional OTel span emission behind the `otel` extra —
+default off) · FastAPI + Uvicorn (`app/api/server.py`, 3 read-only `/v1/*`
+routes, `X-API-Key` auth — wired up, not a stub) · raw `sqlite3` via
+`vcs/db/sqlite.py` (no ORM, no migrations — schema is `data/schema.sql`,
+applied once at init) · pytest · ruff. No mypy is configured — do not
+assume it exists until a spec explicitly adds it.
 
 This project follows **strict spec-driven TDD**. Specs come before tests, tests come
 before code. An agent that writes implementation code without a failing test in place
@@ -130,7 +131,7 @@ Run the full gate (see §4) and report actual output. Then self-check:
 |---|---|---|
 | Unit | `tests/unit/` | Pure logic, validators, domain rules. No I/O. |
 | Integration | `tests/integration/` | Real SQLite (`tests/fixtures/` `db_handler`/`seeder`), real watcher (`watchdog`), real subprocess `git` once `git_store` exists — no Postgres, this project doesn't have one. |
-| API/contract | `tests/api/` | **Not applicable yet.** `app/api/server.py` is unimplemented; this layer only exists once a spec stands it up (e.g. [audit-read-api](../docs/specs/) once written to this template) — until then, don't create `tests/api/`. |
+| API/contract | `tests/unit/app/api/` | `app/api/server.py` is implemented (3 read-only `/v1/*` routes). Exercised via FastAPI's `TestClient` — no real socket opens, so these live under `tests/unit/`, not a separate `tests/api/` tree; there is no `tests/api/` in this project. |
 
 **Conventions**
 
@@ -223,9 +224,9 @@ Layout (actual, under `src/`):
 
 ```
 app/
-  api/          HTTP surface — stub only, not wired up yet
+  api/          FastAPI HTTP surface — 3 read-only /v1/* routes, X-API-Key auth
   cli/          Typer commands (app.py)
-  mcp/          FastMCP tool server + guardrail.py (scope/elicitation)
+  mcp/          FastMCP tool server + guardrail.py (scope/elicitation) + telemetry.py (OTel, optional)
 vcs/
   services/     business logic — versioning.py, configure.py, audit.py
   workers/      watcher, consumers, bus.py (pub/sub), local/ + config/ subpackages
@@ -237,7 +238,8 @@ docs/
   agents/       design/plan docs (issues.md, *-plan.md) — narrative, prose-linked
   specs/        NNN-slug.md, one per feature, this file's template — AC/EC-driven
 tests/
-  unit/ integration/ fixtures/ conftest.py   (no tests/api/ until app/api/ is real)
+  unit/ integration/ fixtures/ conftest.py   (no separate tests/api/ — API tests
+                                               live under tests/unit/, TestClient-based)
 ```
 
 `docs/agents/` and `docs/specs/` are not duplicates — `docs/agents/` holds
@@ -256,6 +258,7 @@ this workflow — not before, and not automatically.
   immediately followed by the `feat:`/`fix:` commit — never implementation alone.
 - Never `git commit --no-verify`. Never force-push a shared branch.
 - Do not commit, push, or open a PR unless the user asked for it.
+- Commit without claude contribution
 
 PR body must include:
 

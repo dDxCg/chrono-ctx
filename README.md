@@ -3,53 +3,78 @@
 [![CI](https://github.com/dDxCg/chrono-ctx/actions/workflows/ci.yaml/badge.svg)](https://github.com/dDxCg/chrono-ctx/actions/workflows/ci.yaml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
-🇬🇧 English · [🇻🇳 Tiếng Việt](README.vi.md)
+## Introduction
 
-## Problem
+AI agents and humans increasingly edit the same context sources — docs,
+prompts, workflows — often within seconds of each other, neither aware of
+what the other just changed. chrono-ctx exists to make that joint,
+unsynchronized editing attributable and recoverable, without asking either
+side to coordinate in advance.
 
-- Context fed to an AI agent (docs, prompts, workflows) changes constantly
-  and nothing tracks its version — the agent can read a stale or corrupted
-  copy with no way to roll back or tell who changed what and when.
-- Turning the source directory itself into a git repo doesn't fit: sources
-  live scattered across many places, not everyone wants a `.git` mixed into
-  their documents, and an agent or a non-technical user can't drive git
-  directly.
-- There's no standard lookup surface — for an agent (MCP) or for another
-  system (HTTP) — to ask "what changed in this file, when, by whom" without
-  importing the codebase directly.
+Turning the source directory itself into a git repo doesn't fit that
+reality: the people and agents actually editing these files can't be
+expected to know git, let alone remember to run `git add`/`git commit`
+after every edit — versioning that depends on someone manually operating
+git is versioning that silently stops the moment they forget, which is
+most of the time. On top of that, sources live scattered across many
+places, and not everyone wants a `.git` mixed into their own documents
+anyway.
+
+An agent can
+read a stale or corrupted copy with no way to roll back or tell who
+changed what and when. And there's no standard lookup surface — for an
+agent (MCP) or for another system (HTTP) — to ask "what changed in this
+file, when, by whom" without importing the codebase directly.
 
 ## Target users
 
 - **AI agent** (via MCP): reads/writes context sources, needs to know the
   current version, needs a scope guardrail (no read/write outside approved
   scope).
-- **Developer/operator** (via CLI + daemon): declares which sources to
+- **Human editor** (direct filesystem): edits the same context sources in
+  their own tools — not a chrono-ctx user in any active sense, has run no
+  `ctx` command, may not know it's installed. The other half of the
+  co-working scenario above.
+- **Operator** (via CLI + daemon): declares which sources to
   track, runs the watch daemon in the background.
-- **Another system / future approval UI** (via HTTP API): read-only history/
+- **Another system** (via HTTP API): read-only history/
   diff lookups, no Python import required.
 
 ## Solution
+```mermaid
+graph TB
+    Human["Human editor<br/>(own editor/IDE —<br/>not a chrono-ctx user)"]
+    Agent["AI agent<br/>(MCP client)"]
+    HTTPClient["HTTP client<br/>(future approval UI, scripts)"]
+    User["Operator<br/>(CLI, admin only)"]
 
-```
-Filesystem  --watch-->  VCS Runtime daemon  --commit-->  Git mirror repos (data/repo/)
-                              |                                    ^
-                              v                                    |
-                       SQLite (identity: contexts/locations)        |
-                                                                     |
-AI agent  --MCP (stdio)-->  MCP server  --plain fs I/O-->  Filesystem (watcher picks it up)
-HTTP client  --GET /v1/*-->  HTTP API  --read-only-->  audit.py --> git mirror repos
+    FS[("Watched context sources<br/>— the co-working surface:<br/>both sides land here")]
+
+    subgraph chrono-ctx
+        System["chrono-ctx"]
+    end
+
+    Human -- "direct file edits —\nno chrono-ctx awareness" --> FS
+    Agent <-- "read/write/create/delete/move_file\n(MCP, stdio)" --> System
+    System -- "plain fs I/O (write path)" --> FS
+    FS -- "watch + mirror\n(every change, either side)" --> System
+    HTTPClient -- "GET /v1/sources, /history, /diff" --> System
+    User -- "ctx source add/remove,\nctx history/rollback/diff" --> System
 ```
 
-Detailed architecture (container/sequence diagrams, data model, concurrency,
-actor attribution, design decisions) → [`ARCHITECTURE.md`](ARCHITECTURE.md).
+For the next level down — processes, components, runtime flows, data model,
+concurrency, actor attribution, design decisions — see
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 | Feature | What it does | Status |
 | --- | --- | --- |
 | Watch + versioning engine | Watches local sources, a similarity gate decides whether to cut a new version, commits into a git mirror per watch target | Done |
 | Git mirror backend | One git repo per watch target, not the source directory itself — least-privilege by scope | Done |
 | `audit.py` (`get_sources`/`get_version_list`/`check_diff`) | Real read access to history/diff on the git backend | Done |
-| Config hot-reload | Add/remove sources via `config.yaml` without restarting the daemon | In progress |
-| MCP tool server | 5 tools (`read/write/create/delete/move_file`) with a real guardrail (elicitation, fail-closed); MCP-triggered edits are actor-attributed via a pending hint the watcher picks up; `write`/`delete` take an optional `expected_version` for optimistic concurrency | Done |
+| Config hot-reload | Add/remove sources via `config.yaml` without restarting the daemon | Done |
+| MCP tool server | 5 tools (`read/write/create/delete/move_file`) with a real guardrail (elicitation, fail-closed); MCP-triggered edits are actor-attributed via a pending hint the watcher picks up and carried as a `Ctx-Actor:` trailer on the mirror commit; `write`/`delete` take an optional `expected_version` for optimistic concurrency; every call is bounded (30s lock wait, 4s/git call, 48s worst case) and logged to `data/mcp.log` | Done |
+| Device-scoped identity | `locations` keyed by `(device_id, st_ino, st_dev)` — a per-install id, not just the filesystem inode, so two machines' files can never collide once rows from more than one reach the same store | Done |
+| Observability (OTel) | Optional span emission per MCP tool call (`pip install chrono-ctx[otel]`, default off) — standard `OTEL_EXPORTER_OTLP_*` env vars, OTLP/HTTP to any collector | Done |
 | HTTP API | 3 read-only routes (`/v1/sources`, `/history`, `/diff`), fail-closed 403, `X-API-Key` auth (single shared key, no per-caller scopes yet) | Done |
 | CLI | `source list/add/remove`, `history`, `diff`, `rollback`, `rollback-session` (undo everything one actor did, across every watch target) | Done |
 | `ctx daemon` | Backgrounds the watch daemon: detached process + PID file, cross-platform graceful stop (`SIGTERM`/`CTRL_BREAK_EVENT`), `start/stop/status` | Done |
@@ -59,8 +84,8 @@ actor attribution, design decisions) → [`ARCHITECTURE.md`](ARCHITECTURE.md).
 | Layer | Technology |
 | --- | --- |
 | Runtime daemon | Python 3.13 · watchdog · homegrown in-process pub/sub, shaped after an AMQP topic exchange (ready to swap in RabbitMQ) |
-| Storage | `git` (subprocess) mirror repo per watch target · SQLite (raw `sqlite3`, identity via `st_ino`/`st_dev`) |
-| MCP | FastMCP (stdio) |
+| Storage | `git` (subprocess) mirror repo per watch target · SQLite (raw `sqlite3`, identity via `device_id`/`st_ino`/`st_dev`) |
+| MCP | FastMCP (stdio) · optional OTel span emission (`chrono-ctx[otel]`) |
 | HTTP API | FastAPI + Uvicorn (read-only) |
 | CLI | Typer |
 | Testing | pytest + ruff · GitHub Actions CI (Python 3.10-3.14, ubuntu-latest) |
@@ -168,9 +193,12 @@ profile one. VS Code's top-level key is `servers`, **not** `mcpServers`:
 }
 ```
 
-**Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global);
+**Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
+
 **Windsurf** — `~/.codeium/windsurf/mcp_config.json`
-(`%USERPROFILE%\.codeium\windsurf\` on Windows); **Gemini CLI** —
+(`%USERPROFILE%\.codeium\windsurf\` on Windows) 
+
+**Gemini CLI** —
 `.gemini/settings.json` (project) or `~/.gemini/settings.json`. All three take
 the same `mcpServers` block as Claude Desktop above. Restart the client after
 editing.
@@ -251,5 +279,5 @@ uv run ruff check .
 
 | Doc | Content |
 | --- | --- |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Detailed architecture: container/sequence diagrams, data model, concurrency, actor attribution, design decisions, open gaps |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Full arc42/C4 architecture: container/component diagrams, runtime flows, deployment, data model, concurrency, actor attribution, decision log, risks |
 | [`docs/runbook-shared-install.md`](docs/runbook-shared-install.md) | Helpdesk-run setup for a shared machine — non-technical users install nothing, technical team owns audit |
